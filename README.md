@@ -14,3 +14,5 @@ C:.
     ├─── 📄 test_format2.csv
     └─── 📄 train_format2.csv
 ```
+
+Luego probar el `kick-off.ipynb` notebook para probar que todo funciona correctamente.
