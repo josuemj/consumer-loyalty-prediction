@@ -15,4 +15,6 @@ C:.
     └─── 📄 train_format2.csv
 ```
 
+Instalar las dependencias con `pip install -r requirements.txt`
+
 Luego probar el `kick-off.ipynb` notebook para probar que todo funciona correctamente.
