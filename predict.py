@@ -5,28 +5,50 @@ from datetime import datetime
 from pathlib import Path
 
 class LoyaltyPredictionPipeline:
-    def __init__(self, models_dir='./models/saved_models/Random Forest'):
+    def __init__(self, models_dir='./models/saved_models/Random Forest', xgb_models_dir='./models/saved_models/XGBoost'):
         self.models_dir = Path(models_dir)
+        self.xgb_models_dir = Path(xgb_models_dir)
         self.rf_all = None
         self.rf_selected = None
+        self.xgb_model = None
         self.metadata = None
         self.reference_date = pd.to_datetime('2014-11-11')
         self.training_data = None
+        self.xgb_features = [
+            'age_range', 'gender', 'merchant_id', 'activity_len', 'actions_0',
+            'actions_2', 'actions_3', 'unique_items', 'unique_categories',
+            'unique_brands', 'day_span', 'has_1111'
+        ]
         
     def load_models(self):
         try:
+            # Cargar Random Forest (SIN MODIFICAR)
             with open(self.models_dir / 'rf_optimized_all_features.pkl', 'rb') as f:
                 self.rf_all = pickle.load(f)
             print("✓ Modelo RF (All Features) cargado")
-            
+
             with open(self.models_dir / 'rf_optimized_selected_features.pkl', 'rb') as f:
                 self.rf_selected = pickle.load(f)
             print("✓ Modelo RF (Selected Features) cargado")
-            
+
             with open(self.models_dir / 'rf_metadata.pkl', 'rb') as f:
                 self.metadata = pickle.load(f)
             print("✓ Metadata cargada")
-            
+
+            # Cargar XGBoost (NUEVO)
+            try:
+                import joblib
+                xgb_path = self.xgb_models_dir / 'best_xgb_model.joblib'
+                if xgb_path.exists():
+                    self.xgb_model = joblib.load(xgb_path)
+                    print("✓ Modelo XGBoost (Best Model) cargado")
+                else:
+                    print("⚠ Modelo XGBoost no encontrado, continuando sin XGBoost")
+            except ImportError:
+                print("⚠ joblib no disponible, saltando carga de XGBoost")
+            except Exception as e:
+                print(f"⚠ Error cargando XGBoost: {str(e)}")
+
         except Exception as e:
             raise Exception(f"Error cargando modelos: {str(e)}")
     
@@ -192,16 +214,16 @@ class LoyaltyPredictionPipeline:
     
     def predict_batch(self, input_data):
         X_all, X_selected = self.preprocess_input(input_data)
-        
+
         pred_all = self.rf_all.predict(X_all)
         proba_all = self.rf_all.predict_proba(X_all)[:, 1]
-        
+
         pred_selected = self.rf_selected.predict(X_selected)
         proba_selected = self.rf_selected.predict_proba(X_selected)[:, 1]
-        
+
         ensemble_pred = ((pred_all + pred_selected) >= 1).astype(int)
         avg_proba = (proba_all + proba_selected) / 2
-        
+
         results = pd.DataFrame({
             'ensemble_prediction': ensemble_pred,
             'loyalty_score': avg_proba,
@@ -212,8 +234,86 @@ class LoyaltyPredictionPipeline:
             'RFM_score': X_all['RFM_score'].values,
             'recency_days': X_all['recency_days'].values
         })
-        
+
         return results
+
+    # ============= MÉTODOS PARA XGBOOST (NUEVO) =============
+    def _preprocess_xgb_input(self, input_data):
+        """Prepara datos para XGBoost usando features crudas"""
+        if isinstance(input_data, dict):
+            df = pd.DataFrame([input_data])
+        else:
+            df = input_data.copy()
+
+        # Crear DataFrame con todas las features necesarias
+        # Si faltan features, se rellenan con 0
+        X_xgb = pd.DataFrame()
+        for col in self.xgb_features:
+            if col in df.columns:
+                X_xgb[col] = df[col].fillna(0)
+            else:
+                # Feature no disponible en datos de entrada, usar 0 por defecto
+                X_xgb[col] = 0
+
+        return X_xgb[self.xgb_features]
+
+    def predict_single_xgb(self, input_data):
+        """Predice lealtad usando XGBoost (modelo individual)"""
+        if self.xgb_model is None:
+            return {
+                'error': 'XGBoost model not loaded',
+                'xgb_prediction': None,
+                'xgb_probability': None
+            }
+
+        X_xgb = self._preprocess_xgb_input(input_data)
+
+        try:
+            # El modelo XGBoost fue entrenado con una pipeline que incluye StandardScaler
+            # predict_proba maneja el escalado internamente en la pipeline
+            proba_xgb = self.xgb_model.predict_proba(X_xgb)[0]
+
+            # Obtener la probabilidad de clase 1 (leal)
+            proba_class_1 = proba_xgb[1] if len(proba_xgb) > 1 else proba_xgb[0]
+
+            # Usar umbral óptimo encontrado en validación (0.08)
+            # Este umbral maximiza F1-score en el conjunto de validación
+            optimal_threshold = 0.08
+            pred_xgb = 1 if proba_class_1 >= optimal_threshold else 0
+
+            return {
+                'xgb_prediction': int(pred_xgb),
+                'xgb_probability': float(proba_class_1),
+                'xgb_threshold': float(optimal_threshold)
+            }
+        except Exception as e:
+            return {
+                'error': f'Error en predicción XGBoost: {str(e)}',
+                'xgb_prediction': None,
+                'xgb_probability': None
+            }
+
+    def predict_batch_xgb(self, input_data):
+        """Predice lealtad en batch usando XGBoost"""
+        if self.xgb_model is None:
+            return pd.DataFrame({'error': 'XGBoost model not loaded'})
+
+        X_xgb = self._preprocess_xgb_input(input_data)
+
+        try:
+            proba_xgb = self.xgb_model.predict_proba(X_xgb)[:, 1]
+            optimal_threshold = 0.08
+            pred_xgb = (proba_xgb >= optimal_threshold).astype(int)
+
+            results = pd.DataFrame({
+                'xgb_prediction': pred_xgb,
+                'xgb_probability': proba_xgb,
+                'xgb_threshold': optimal_threshold
+            })
+
+            return results
+        except Exception as e:
+            return pd.DataFrame({'error': f'Error en predicción XGBoost: {str(e)}'})
     
     def generate_report(self, predictions_df):
         total = len(predictions_df)
@@ -243,8 +343,8 @@ class LoyaltyPredictionPipeline:
         
         return report
 
-def load_pipeline(models_dir='./models/saved_models/Random Forest', train_path='./data/train_clean.csv'):
-    pipeline = LoyaltyPredictionPipeline(models_dir)
+def load_pipeline(models_dir='./models/saved_models/Random Forest', xgb_models_dir='./models/saved_models/XGBoost', train_path='./data/train_clean.csv'):
+    pipeline = LoyaltyPredictionPipeline(models_dir, xgb_models_dir)
     pipeline.load_models()
     pipeline.load_training_data(train_path)
     return pipeline

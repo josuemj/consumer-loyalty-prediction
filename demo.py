@@ -60,7 +60,8 @@ print("PREDICCIÓN DE LEALTAD - CLIENTES BASADOS EN DATOS REALES")
 print("="*80)
 
 for nombre, datos in clientes.items():
-    resultado = pipeline.predict_single(datos)
+    resultado_rf = pipeline.predict_single(datos)
+    resultado_xgb = pipeline.predict_single_xgb(datos)
 
     print(f"\n{nombre}")
     print("-"*80)
@@ -70,33 +71,44 @@ for nombre, datos in clientes.items():
     print(f"  - Compras: {datos['actions_3']}")
     print(f"  - Items únicos: {datos['unique_items']}")
     print(f"  - Black Friday: {'Sí' if datos['has_1111'] == 1 else 'No'}")
-    
+
     print(f"\nFeatures RFM:")
-    print(f"  - Recency (días): {resultado['input_features']['recency_days']}")
-    print(f"  - RFM Score: {resultado['input_features']['RFM_score']:.2f}")
-    print(f"  - Frequency: {resultado['input_features']['frequency_activity']}")
-    print(f"  - Monetary: {resultado['input_features']['monetary_proxy']}")
-    
-    print(f"\nPredicciones:")
-    print(f"  - All Features: {'LEAL' if resultado['model_predictions']['all_features']['prediction'] == 1 else 'NO LEAL'} ({resultado['model_predictions']['all_features']['probability']*100:.2f}%)")
-    print(f"  - Selected: {'LEAL' if resultado['model_predictions']['selected_features']['prediction'] == 1 else 'NO LEAL'} ({resultado['model_predictions']['selected_features']['probability']*100:.2f}%)")
-    
-    print(f"\n{'='*25} RESULTADO {'='*25}")
-    if resultado['ensemble_prediction'] == 1:
-        print(f"✓ SÍ será comprador recurrente")
+    print(f"  - Recency (días): {resultado_rf['input_features']['recency_days']}")
+    print(f"  - RFM Score: {resultado_rf['input_features']['RFM_score']:.2f}")
+    print(f"  - Frequency: {resultado_rf['input_features']['frequency_activity']}")
+    print(f"  - Monetary: {resultado_rf['input_features']['monetary_proxy']}")
+
+    print(f"\n{'='*25} RANDOM FOREST {'='*25}")
+    print(f"Predicciones RF:")
+    print(f"  - All Features: {'LEAL' if resultado_rf['model_predictions']['all_features']['prediction'] == 1 else 'NO LEAL'} ({resultado_rf['model_predictions']['all_features']['probability']*100:.2f}%)")
+    print(f"  - Selected: {'LEAL' if resultado_rf['model_predictions']['selected_features']['prediction'] == 1 else 'NO LEAL'} ({resultado_rf['model_predictions']['selected_features']['probability']*100:.2f}%)")
+    print(f"\nResultado Ensemble RF: {'✓ LEAL' if resultado_rf['ensemble_prediction'] == 1 else '✗ NO LEAL'}")
+    print(f"Probabilidad: {resultado_rf['loyalty_score']*100:.2f}%")
+    print(f"Confianza: {resultado_rf['confidence']['confidence_level']}")
+
+    print(f"\n{'='*25} XGBOOST {'='*25}")
+    if 'error' in resultado_xgb:
+        print(f"⚠ {resultado_xgb['error']}")
     else:
-        print(f"✗ NO será comprador recurrente")
-    print(f"Probabilidad: {resultado['loyalty_score']*100:.2f}%")
-    print(f"Confianza: {resultado['confidence']['confidence_level']}")
+        print(f"Predicción XGBoost: {'✓ LEAL' if resultado_xgb['xgb_prediction'] == 1 else '✗ NO LEAL'}")
+        print(f"Probabilidad: {resultado_xgb['xgb_probability']*100:.2f}%")
+        print(f"Umbral: {resultado_xgb['xgb_threshold']:.4f}")
 
 print("\n" + "="*80)
 print("CONCLUSIONES")
 print("="*80)
+print("\nComparación de Modelos:")
+print("- RANDOM FOREST: Usa features derivadas (RFM, scores)")
+print("- XGBOOST: Usa features crudas del dataset (age_range, merchant_id, etc.)")
+print("\nCada modelo tiene su propia estrategia:")
+print("  RF: Analiza patrones de compra históricos (Recency, Frequency, Monetary)")
+print("  XGB: Considera características del cliente y su comportamiento general")
+print("\nUmbral Óptimo XGBoost: 0.08 (encontrado en validación con F1-Score)")
 print("\nSegún los datos de entrenamiento:")
 print("- Recency=0 (última compra el 2014-11-11) es lo más común")
 print("- P80 de frequency_activity = 14")
 print("- P80 de monetary_proxy = 9")
-print("- Clientes con recency > 0 tienen PEOR score")
-print("\nPor eso tu cliente original con recency=1 tiene score bajo.")
-print("Si cambias date_max a '2014-11-11', el score debería mejorar.")
+print("- Clientes con recency > 0 tienen PEOR score en RF")
+print("\nPor eso tu cliente original con recency=1 tiene score bajo en RF.")
+print("Si cambias date_max a '2014-11-11', el score de RF debería mejorar.")
 print("="*80 + "\n")
