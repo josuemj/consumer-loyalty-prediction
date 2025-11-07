@@ -1,0 +1,21 @@
+{
+  "best_params": {
+    "objective": "binary",
+    "metric": "auc",
+    "verbosity": -1,
+    "boosting_type": "gbdt",
+    "learning_rate": 0.14875387799657408,
+    "num_leaves": 18,
+    "max_depth": 16,
+    "min_child_samples": 8,
+    "subsample": 0.9903245296877168,
+    "colsample_bytree": 0.9353653566977623,
+    "reg_alpha": 4.3444691085504115,
+    "reg_lambda": 6.178893500921431,
+    "seed": 42,
+    "force_row_wise": true
+  },
+  "train_rows": 187821,
+  "val_rows": 20870,
+  "best_iteration": 150
+}
