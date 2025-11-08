@@ -62,6 +62,7 @@ print("="*80)
 for nombre, datos in clientes.items():
     resultado_rf = pipeline.predict_single(datos)
     resultado_xgb = pipeline.predict_single_xgb(datos)
+    resultado_lgb = pipeline.predict_single_lgb(datos)
 
     print(f"\n{nombre}")
     print("-"*80)
@@ -94,16 +95,29 @@ for nombre, datos in clientes.items():
         print(f"Probabilidad: {resultado_xgb['xgb_probability']*100:.2f}%")
         print(f"Umbral: {resultado_xgb['xgb_threshold']:.4f}")
 
+    print(f"\n{'='*25} LIGHTGBM {'='*25}")
+    if 'error' in resultado_lgb:
+        print(f"⚠ {resultado_lgb['error']}")
+    else:
+        print(f"Predicción LightGBM: {'✓ LEAL' if resultado_lgb['lgb_prediction'] == 1 else '✗ NO LEAL'}")
+        print(f"Probabilidad: {resultado_lgb['lgb_probability']*100:.2f}%")
+        print(f"Umbral: {resultado_lgb['lgb_threshold']:.4f}")
+        print(f"Modelo: Focal Loss | F1-Score: {resultado_lgb['lgb_f1_score']:.3f} | ROC-AUC: {resultado_lgb['lgb_roc_auc']:.3f}")
+
 print("\n" + "="*80)
 print("CONCLUSIONES")
 print("="*80)
 print("\nComparación de Modelos:")
 print("- RANDOM FOREST: Usa features derivadas (RFM, scores)")
 print("- XGBOOST: Usa features crudas del dataset (age_range, merchant_id, etc.)")
+print("- LIGHTGBM: Usa features crudas + merchant_freq con Focal Loss")
 print("\nCada modelo tiene su propia estrategia:")
 print("  RF: Analiza patrones de compra históricos (Recency, Frequency, Monetary)")
 print("  XGB: Considera características del cliente y su comportamiento general")
-print("\nUmbral Óptimo XGBoost: 0.08 (encontrado en validación con F1-Score)")
+print("  LGB: Gradient boosting optimizado para desbalance de clases con Focal Loss")
+print("\nUmbrales Ajustados:")
+print("  - XGBoost: 0.12 (aumentado para ser más conservador con desbalance de clases)")
+print("  - LightGBM: 0.0335 (Focal Loss | F1-Score: 0.187 | ROC-AUC: 0.654)")
 print("\nSegún los datos de entrenamiento:")
 print("- Recency=0 (última compra el 2014-11-11) es lo más común")
 print("- P80 de frequency_activity = 14")

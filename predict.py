@@ -5,12 +5,14 @@ from datetime import datetime
 from pathlib import Path
 
 class LoyaltyPredictionPipeline:
-    def __init__(self, models_dir='./models/saved_models/Random Forest', xgb_models_dir='./models/saved_models/XGBoost'):
+    def __init__(self, models_dir='./models/saved_models/Random Forest', xgb_models_dir='./models/saved_models/XGBoost', lgb_models_dir='./models/saved_models/lightgbm'):
         self.models_dir = Path(models_dir)
         self.xgb_models_dir = Path(xgb_models_dir)
+        self.lgb_models_dir = Path(lgb_models_dir)
         self.rf_all = None
         self.rf_selected = None
         self.xgb_model = None
+        self.lgb_model = None
         self.metadata = None
         self.reference_date = pd.to_datetime('2014-11-11')
         self.training_data = None
@@ -19,10 +21,15 @@ class LoyaltyPredictionPipeline:
             'actions_2', 'actions_3', 'unique_items', 'unique_categories',
             'unique_brands', 'day_span', 'has_1111'
         ]
+        self.lgb_features = [
+            'activity_len', 'actions_0', 'actions_2', 'actions_3',
+            'unique_items', 'unique_categories', 'unique_brands',
+            'day_span', 'has_1111', 'age_range', 'gender', 'merchant_freq'
+        ]
+        self.merchant_freq = None
         
     def load_models(self):
         try:
-            # Cargar Random Forest (SIN MODIFICAR)
             with open(self.models_dir / 'rf_optimized_all_features.pkl', 'rb') as f:
                 self.rf_all = pickle.load(f)
             print("✓ Modelo RF (All Features) cargado")
@@ -35,7 +42,6 @@ class LoyaltyPredictionPipeline:
                 self.metadata = pickle.load(f)
             print("✓ Metadata cargada")
 
-            # Cargar XGBoost (NUEVO)
             try:
                 import joblib
                 xgb_path = self.xgb_models_dir / 'best_xgb_model.joblib'
@@ -49,6 +55,19 @@ class LoyaltyPredictionPipeline:
             except Exception as e:
                 print(f"⚠ Error cargando XGBoost: {str(e)}")
 
+            try:
+                import joblib
+                lgb_path = self.lgb_models_dir / 'final_focal_bst_joblib.pkl'
+                if lgb_path.exists():
+                    self.lgb_model = joblib.load(lgb_path)
+                    print("✓ Modelo LightGBM (Final Focal) cargado")
+                else:
+                    print("⚠ Modelo LightGBM no encontrado, continuando sin LightGBM")
+            except ImportError:
+                print("⚠ joblib no disponible, saltando carga de LightGBM")
+            except Exception as e:
+                print(f"⚠ Error cargando LightGBM: {str(e)}")
+
         except Exception as e:
             raise Exception(f"Error cargando modelos: {str(e)}")
     
@@ -56,18 +75,22 @@ class LoyaltyPredictionPipeline:
         try:
             self.training_data = pd.read_csv(train_path)
             self.training_data = self.training_data[self.training_data['label'].isin([0, 1])].copy()
-            
+
             self.training_data['date_max'] = pd.to_datetime(self.training_data['date_max'], errors='coerce')
             self.training_data['recency_days'] = (self.reference_date - self.training_data['date_max']).dt.days
             self.training_data['recency_days'] = self.training_data['recency_days'].fillna(9999).astype(int)
-            
+
             self.training_data['frequency_activity'] = self.training_data['activity_len'].fillna(0).astype(int)
             self.training_data['frequency_purchases'] = self.training_data['actions_3'].fillna(0).astype(int)
             self.training_data['monetary_proxy'] = (
                 self.training_data[['unique_items', 'unique_categories', 'unique_brands']]
                 .fillna(0).sum(axis=1).astype(int)
             )
-            
+
+            if 'merchant_id' in self.training_data.columns:
+                merchant_counts = self.training_data['merchant_id'].value_counts()
+                self.merchant_freq = merchant_counts
+
             print("✓ Datos de entrenamiento cargados")
         except Exception as e:
             raise Exception(f"Error cargando datos de entrenamiento: {str(e)}")
@@ -237,7 +260,6 @@ class LoyaltyPredictionPipeline:
 
         return results
 
-    # ============= MÉTODOS PARA XGBOOST (NUEVO) =============
     def _preprocess_xgb_input(self, input_data):
         """Prepara datos para XGBoost usando features crudas"""
         if isinstance(input_data, dict):
@@ -245,15 +267,24 @@ class LoyaltyPredictionPipeline:
         else:
             df = input_data.copy()
 
-        # Crear DataFrame con todas las features necesarias
-        # Si faltan features, se rellenan con 0
+        defaults = {
+            'age_range': 3,
+            'gender': 1,
+            'merchant_id': 1,
+            'actions_0': 0,
+            'actions_2': 0,
+            'activity_len': 0,
+            'actions_3': 0,
+            'unique_items': 0,
+            'unique_categories': 0,
+            'unique_brands': 0,
+            'day_span': 0,
+            'has_1111': 0
+        }
+
         X_xgb = pd.DataFrame()
         for col in self.xgb_features:
-            if col in df.columns:
-                X_xgb[col] = df[col].fillna(0)
-            else:
-                # Feature no disponible en datos de entrada, usar 0 por defecto
-                X_xgb[col] = 0
+            X_xgb[col] = df[col].fillna(defaults.get(col, 0)) if col in df.columns else defaults.get(col, 0)
 
         return X_xgb[self.xgb_features]
 
@@ -269,16 +300,10 @@ class LoyaltyPredictionPipeline:
         X_xgb = self._preprocess_xgb_input(input_data)
 
         try:
-            # El modelo XGBoost fue entrenado con una pipeline que incluye StandardScaler
-            # predict_proba maneja el escalado internamente en la pipeline
             proba_xgb = self.xgb_model.predict_proba(X_xgb)[0]
-
-            # Obtener la probabilidad de clase 1 (leal)
             proba_class_1 = proba_xgb[1] if len(proba_xgb) > 1 else proba_xgb[0]
 
-            # Usar umbral óptimo encontrado en validación (0.08)
-            # Este umbral maximiza F1-score en el conjunto de validación
-            optimal_threshold = 0.08
+            optimal_threshold = 0.12
             pred_xgb = 1 if proba_class_1 >= optimal_threshold else 0
 
             return {
@@ -302,7 +327,7 @@ class LoyaltyPredictionPipeline:
 
         try:
             proba_xgb = self.xgb_model.predict_proba(X_xgb)[:, 1]
-            optimal_threshold = 0.08
+            optimal_threshold = 0.12
             pred_xgb = (proba_xgb >= optimal_threshold).astype(int)
 
             results = pd.DataFrame({
@@ -314,7 +339,89 @@ class LoyaltyPredictionPipeline:
             return results
         except Exception as e:
             return pd.DataFrame({'error': f'Error en predicción XGBoost: {str(e)}'})
-    
+
+    def _preprocess_lgb_input(self, input_data):
+        """Prepara datos para LightGBM usando features crudas + merchant_freq"""
+        if isinstance(input_data, dict):
+            df = pd.DataFrame([input_data])
+        else:
+            df = input_data.copy()
+
+        defaults = {
+            'activity_len': 0,
+            'actions_0': 0,
+            'actions_2': 0,
+            'actions_3': 0,
+            'unique_items': 0,
+            'unique_categories': 0,
+            'unique_brands': 0,
+            'day_span': 0,
+            'has_1111': 0,
+            'age_range': 3,
+            'gender': 1,
+            'merchant_freq': 1
+        }
+
+        X_lgb = pd.DataFrame()
+        for col in self.lgb_features:
+            X_lgb[col] = df[col].fillna(defaults.get(col, 0)) if col in df.columns else defaults.get(col, 0)
+
+        return X_lgb[self.lgb_features]
+
+    def predict_single_lgb(self, input_data):
+        """Predice lealtad usando LightGBM (modelo individual con Focal Loss)"""
+        if self.lgb_model is None:
+            return {
+                'error': 'LightGBM model not loaded',
+                'lgb_prediction': None,
+                'lgb_probability': None
+            }
+
+        X_lgb = self._preprocess_lgb_input(input_data)
+
+        try:
+            proba_lgb = self.lgb_model.predict(X_lgb.values)[0]
+            proba_class_1 = float(proba_lgb)
+
+            optimal_threshold = 0.0335
+            pred_lgb = 1 if proba_class_1 >= optimal_threshold else 0
+
+            return {
+                'lgb_prediction': int(pred_lgb),
+                'lgb_probability': float(proba_class_1),
+                'lgb_threshold': float(optimal_threshold),
+                'lgb_f1_score': 0.187,
+                'lgb_roc_auc': 0.654
+            }
+        except Exception as e:
+            return {
+                'error': f'Error en predicción LightGBM: {str(e)}',
+                'lgb_prediction': None,
+                'lgb_probability': None
+            }
+
+    def predict_batch_lgb(self, input_data):
+        """Predice lealtad en batch usando LightGBM"""
+        if self.lgb_model is None:
+            return pd.DataFrame({'error': 'LightGBM model not loaded'})
+
+        X_lgb = self._preprocess_lgb_input(input_data)
+
+        try:
+            proba_lgb = self.lgb_model.predict(X_lgb.values)
+            optimal_threshold = 0.0335
+            pred_lgb = (proba_lgb >= optimal_threshold).astype(int)
+
+            results = pd.DataFrame({
+                'lgb_prediction': pred_lgb,
+                'lgb_probability': proba_lgb,
+                'lgb_threshold': optimal_threshold
+            })
+
+            return results
+        except Exception as e:
+            return pd.DataFrame({'error': f'Error en predicción LightGBM: {str(e)}'})
+
     def generate_report(self, predictions_df):
         total = len(predictions_df)
         predicted_loyal = (predictions_df['ensemble_prediction'] == 1).sum()
@@ -343,8 +450,8 @@ class LoyaltyPredictionPipeline:
         
         return report
 
-def load_pipeline(models_dir='./models/saved_models/Random Forest', xgb_models_dir='./models/saved_models/XGBoost', train_path='./data/train_clean.csv'):
-    pipeline = LoyaltyPredictionPipeline(models_dir, xgb_models_dir)
+def load_pipeline(models_dir='./models/saved_models/Random Forest', xgb_models_dir='./models/saved_models/XGBoost', lgb_models_dir='./models/saved_models/lightgbm', train_path='./data/train_clean.csv'):
+    pipeline = LoyaltyPredictionPipeline(models_dir, xgb_models_dir, lgb_models_dir)
     pipeline.load_models()
     pipeline.load_training_data(train_path)
     return pipeline
