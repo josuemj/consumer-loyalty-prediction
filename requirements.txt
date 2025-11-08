@@ -3,3 +3,6 @@ numpy
 xgboost
 scikit-learn
 lightgbm
+streamlit
+plotly
+joblib
