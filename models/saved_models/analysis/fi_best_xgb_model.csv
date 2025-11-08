@@ -1,0 +1,13 @@
+feature,importance
+actions_0,0.13616641
+merchant_id,0.13580245
+unique_items,0.13135065
+activity_len,0.11020002
+age_range,0.09409579
+user_id,0.094001785
+unique_brands,0.083980605
+gender,0.07893719
+actions_3,0.07171886
+unique_categories,0.06374628
+actions_2,0.0
+date_min,0.0
