@@ -19,19 +19,45 @@ COLOR_PALETTE = {
 }
 
 @st.cache_data
-def load_data():
-    """Cargar datos del archivo train_clean.csv"""
+def get_total_records():
+    """Obtener el número total de registros sin cargar todo el dataset"""
     data_path = Path(__file__).parent.parent / 'data' / 'train_clean.csv'
-    df = pd.read_csv(data_path)
+    # Leer solo para contar líneas
+    with open(data_path, 'r') as f:
+        total = sum(1 for _ in f) - 1  # -1 para el header
+    return total
+
+@st.cache_data
+def load_data(sample_size=None):
+    """
+    Cargar datos del archivo train_clean.csv
+    Si sample_size es None, carga todo el dataset
+    Si sample_size > 0, carga una muestra estratificada
+    """
+    data_path = Path(__file__).parent.parent / 'data' / 'train_clean.csv'
+
+    if sample_size is None or sample_size <= 0:
+        # Cargar todo el dataset
+        df = pd.read_csv(data_path)
+    else:
+        # Cargar con muestreo - más eficiente
+        # Primero leer todo para hacer muestreo estratificado por label
+        df_full = pd.read_csv(data_path)
+
+        if len(df_full) <= sample_size:
+            df = df_full
+        else:
+            # Muestreo estratificado por label
+            df = df_full.groupby('label', group_keys=False).apply(
+                lambda x: x.sample(n=min(len(x), sample_size // 3), random_state=42)
+            )
+            df = df.sample(n=min(sample_size, len(df)), random_state=42)
 
     # Convertir fechas
     df['date_min'] = pd.to_datetime(df['date_min'])
     df['date_max'] = pd.to_datetime(df['date_max'])
 
-    # Filtrar solo clientes nuevos (label != -1) para análisis
-    df_new = df[df['label'] != -1].copy()
-
-    return df, df_new
+    return df
 
 def create_age_range_labels():
     """Mapeo de rangos de edad"""
@@ -55,16 +81,60 @@ def create_gender_labels():
         2: 'Desconocido'
     }
 
+def smart_sample(df, max_size=50000, min_size=10000):
+    """
+    Muestreo inteligente para optimizar visualizaciones
+    - Si df tiene menos de min_size registros, no muestrea
+    - Si tiene entre min_size y max_size, usa todo
+    - Si tiene más de max_size, muestrea estratificadamente
+    """
+    if len(df) <= min_size:
+        return df, False
+    elif len(df) <= max_size:
+        return df, False
+    else:
+        # Muestreo estratificado por label si existe
+        if 'label' in df.columns:
+            sample = df.groupby('label', group_keys=False).apply(
+                lambda x: x.sample(n=min(len(x), max_size // 3), random_state=42)
+            )
+        else:
+            sample = df.sample(n=max_size, random_state=42)
+        return sample, True
+
 def show_analisis():
     """Módulo principal de análisis exploratorio"""
 
     st.header("📊 Análisis Exploratorio de Datos")
 
-    # Cargar datos
-    df_all, df_new = load_data()
+    # Obtener total de registros del dataset completo
+    TOTAL_RECORDS = get_total_records()
 
-    # Sidebar con filtros
-    st.sidebar.header("🎛️ Filtros Dinámicos")
+    # Sidebar con configuración
+    st.sidebar.header("🎛️ Configuración y Filtros")
+
+    # Configuración de carga de datos
+    st.sidebar.subheader("⚙️ Modo de Carga")
+    load_mode = st.sidebar.radio(
+        "Selecciona el modo:",
+        options=["Muestra rápida", "Dataset completo"],
+        index=0,
+        help="Muestra rápida: 500K registros para mejor rendimiento\nDataset completo: 7M registros (puede ser lento)"
+    )
+
+    # Cargar datos según el modo seleccionado
+    if load_mode == "Muestra rápida":
+        sample_size = 500000
+        df_all = load_data(sample_size=sample_size)
+        st.sidebar.info(f"📊 Trabajando con muestra de **{len(df_all):,}** de **{TOTAL_RECORDS:,}** registros")
+    else:
+        with st.sidebar:
+            with st.spinner("Cargando dataset completo... Esto puede tardar unos segundos..."):
+                df_all = load_data(sample_size=None)
+        st.sidebar.success(f"✅ Dataset completo cargado: **{TOTAL_RECORDS:,}** registros")
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔍 Filtros Dinámicos")
 
     # Filtro de label
     label_options = {
@@ -77,7 +147,7 @@ def show_analisis():
     label_filter = st.sidebar.selectbox(
         "Tipo de cliente:",
         options=list(label_options.keys()),
-        index=1  # Por defecto "Solo nuevos clientes"
+        index=0  # Por defecto "Todos" - mostrar todo el dataset
     )
     df_filtered = df_all[df_all['label'].isin(label_options[label_filter])]
 
@@ -118,14 +188,42 @@ def show_analisis():
     has_1111_filter = st.sidebar.checkbox("Solo con actividad en Double 11", value=False)
     if has_1111_filter:
         df_filtered = df_filtered[df_filtered['has_1111'] == 1]
+        st.sidebar.success("✅ Filtro Double 11 activo")
 
     # Mostrar estadísticas generales
     st.subheader("📈 Estadísticas Descriptivas")
 
+    # Construir resumen de filtros activos
+    active_filters = []
+    if label_filter != 'Todos':
+        active_filters.append(f"Tipo: {label_filter}")
+    if len(selected_genders) < 3:
+        gender_names = [gender_labels[g] for g in selected_genders]
+        active_filters.append(f"Género: {', '.join(gender_names)}")
+    if len(selected_ages) < 9:
+        active_filters.append(f"Edades: {len(selected_ages)} rangos")
+    if activity_range != (1, max_activity):
+        active_filters.append(f"Actividad: {activity_range[0]}-{activity_range[1]}")
+    if has_1111_filter:
+        active_filters.append("Solo Double 11")
+
+    # Mostrar información de filtros activos
+    filtered_count = len(df_filtered)
+    filtered_pct = (filtered_count / TOTAL_RECORDS * 100) if TOTAL_RECORDS > 0 else 0
+
+    if active_filters:
+        st.info(f"🎯 **Filtros activos:** {' | '.join(active_filters)} → Mostrando **{filtered_count:,}** de **{TOTAL_RECORDS:,}** registros ({filtered_pct:.1f}%)")
+    else:
+        st.success(f"✅ **Sin filtros** - Mostrando todos los **{TOTAL_RECORDS:,}** registros del dataset")
+
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
-        st.metric("Total Registros", f"{len(df_filtered):,}")
+        st.metric(
+            "Registros Mostrados",
+            f"{filtered_count:,}",
+            delta=f"{filtered_pct:.1f}% del total" if active_filters else None
+        )
 
     with col2:
         if label_filter == 'Solo nuevos clientes':
@@ -141,7 +239,13 @@ def show_analisis():
         st.metric("Actividad Media", f"{df_filtered['activity_len'].mean():.1f}")
 
     with col5:
-        st.metric("% Double 11", f"{(df_filtered['has_1111'].sum() / len(df_filtered) * 100):.1f}%")
+        double11_count = df_filtered['has_1111'].sum()
+        st.metric("Registros Double 11", f"{double11_count:,}")
+        if has_1111_filter:
+            st.caption("(100% - filtro activo)")
+        else:
+            double11_pct = (double11_count / len(df_filtered) * 100) if len(df_filtered) > 0 else 0
+            st.caption(f"({double11_pct:.1f}% del total)")
 
     st.markdown("---")
 
@@ -154,7 +258,7 @@ def show_analisis():
     ])
 
     with tab_dist:
-        show_distributions(df_filtered, df_new)
+        show_distributions(df_filtered)
 
     with tab_corr:
         show_correlations(df_filtered)
@@ -165,7 +269,7 @@ def show_analisis():
     with tab_rfm:
         show_rfm_analysis(df_filtered)
 
-def show_distributions(df_filtered, df_new):
+def show_distributions(df_filtered):
     """Visualizaciones de distribuciones"""
 
     st.subheader("Distribuciones de Variables Clave")
@@ -426,12 +530,18 @@ def show_correlations(df_filtered):
             index=numeric_cols.index('actions_3')
         )
 
-    # Crear scatter plot
+    # Crear scatter plot con muestreo inteligente
     df_scatter = df_filtered[df_filtered['label'] != -1].copy()
     df_scatter['label_text'] = df_scatter['label'].map({0: 'No Recurrente', 1: 'Recurrente'})
 
+    # Aplicar muestreo si el dataset es muy grande
+    df_scatter_sample, was_sampled = smart_sample(df_scatter, max_size=10000)
+
+    if was_sampled:
+        st.caption(f"📊 Mostrando muestra de {len(df_scatter_sample):,} de {len(df_scatter):,} registros para mejor rendimiento")
+
     fig_scatter = px.scatter(
-        df_scatter,
+        df_scatter_sample,
         x=x_var,
         y=y_var,
         color='label_text',
@@ -527,44 +637,82 @@ def show_temporal_analysis(df_filtered):
     with col3:
         double11_dist = df_filtered['has_1111'].value_counts().sort_index()
 
-        fig_1111 = go.Figure(data=[
-            go.Pie(
-                labels=['Sin actividad en 11/11', 'Con actividad en 11/11'],
-                values=double11_dist.values,
-                marker_colors=[COLOR_PALETTE['secondary'], COLOR_PALETTE['primary']],
-                hole=0.4,
-                textinfo='label+percent+value'
+        # Si el filtro está activo, mostrar mensaje en lugar de gráfico
+        if len(double11_dist) == 1 and 1 in double11_dist.index:
+            st.info(f"🎯 **Filtro activo:** Solo mostrando clientes con actividad en Double 11\n\n"
+                   f"Total de registros: **{double11_dist[1]:,}**")
+        else:
+            # Crear labels dinámicamente según los valores presentes
+            labels = []
+            values = []
+            colors = []
+
+            if 0 in double11_dist.index:
+                labels.append('Sin actividad en 11/11')
+                values.append(double11_dist[0])
+                colors.append(COLOR_PALETTE['secondary'])
+
+            if 1 in double11_dist.index:
+                labels.append('Con actividad en 11/11')
+                values.append(double11_dist[1])
+                colors.append(COLOR_PALETTE['primary'])
+
+            fig_1111 = go.Figure(data=[
+                go.Pie(
+                    labels=labels,
+                    values=values,
+                    marker_colors=colors,
+                    hole=0.4,
+                    textinfo='label+percent+value'
+                )
+            ])
+            fig_1111.update_layout(
+                title="Distribución de Actividad en Double 11",
+                height=400
             )
-        ])
-        fig_1111.update_layout(
-            title="Distribución de Actividad en Double 11",
-            height=400
-        )
-        st.plotly_chart(fig_1111, use_container_width=True)
+            st.plotly_chart(fig_1111, use_container_width=True)
 
     with col4:
         # Recurrencia por participación en Double 11
         df_1111 = df_filtered[df_filtered['label'] != -1].copy()
 
-        double11_recurrence = df_1111.groupby('has_1111')['label'].agg(['sum', 'count'])
-        double11_recurrence['percentage'] = (double11_recurrence['sum'] / double11_recurrence['count'] * 100)
+        if len(df_1111) == 0:
+            st.warning("No hay datos de clientes nuevos para mostrar recurrencia")
+        else:
+            double11_recurrence = df_1111.groupby('has_1111')['label'].agg(['sum', 'count'])
+            double11_recurrence['percentage'] = (double11_recurrence['sum'] / double11_recurrence['count'] * 100)
 
-        fig_1111_impact = go.Figure(data=[
-            go.Bar(
-                x=['Sin 11/11', 'Con 11/11'],
-                y=double11_recurrence['percentage'].values,
-                marker_color=[COLOR_PALETTE['secondary'], COLOR_PALETTE['primary']],
-                text=double11_recurrence['percentage'].values.round(1),
-                texttemplate='%{text}%',
-                textposition='auto',
+            # Crear labels y valores dinámicamente
+            x_labels = []
+            y_values = []
+            colors = []
+
+            if 0 in double11_recurrence.index:
+                x_labels.append('Sin 11/11')
+                y_values.append(double11_recurrence.loc[0, 'percentage'])
+                colors.append(COLOR_PALETTE['secondary'])
+
+            if 1 in double11_recurrence.index:
+                x_labels.append('Con 11/11')
+                y_values.append(double11_recurrence.loc[1, 'percentage'])
+                colors.append(COLOR_PALETTE['primary'])
+
+            fig_1111_impact = go.Figure(data=[
+                go.Bar(
+                    x=x_labels,
+                    y=y_values,
+                    marker_color=colors,
+                    text=[f"{val:.1f}" for val in y_values],
+                    texttemplate='%{text}%',
+                    textposition='auto',
+                )
+            ])
+            fig_1111_impact.update_layout(
+                title="% Recurrencia según participación en Double 11",
+                yaxis_title="% Clientes Recurrentes",
+                height=400
             )
-        ])
-        fig_1111_impact.update_layout(
-            title="% Recurrencia según participación en Double 11",
-            yaxis_title="% Clientes Recurrentes",
-            height=400
-        )
-        st.plotly_chart(fig_1111_impact, use_container_width=True)
+            st.plotly_chart(fig_1111_impact, use_container_width=True)
 
 def show_rfm_analysis(df_filtered):
     """Segmentación RFM (Recency, Frequency, Monetary)"""
@@ -698,8 +846,11 @@ def show_rfm_analysis(df_filtered):
     # Scatter 3D de RFM
     st.subheader("Visualización 3D de Segmentación RFM")
 
-    # Muestreo para mejor rendimiento
-    df_sample = df_rfm.sample(n=min(5000, len(df_rfm)), random_state=42)
+    # Muestreo inteligente para mejor rendimiento
+    df_sample, was_sampled = smart_sample(df_rfm, max_size=5000)
+
+    if was_sampled:
+        st.caption(f"📊 Mostrando muestra de {len(df_sample):,} de {len(df_rfm):,} registros para mejor rendimiento")
 
     fig_3d = px.scatter_3d(
         df_sample,
