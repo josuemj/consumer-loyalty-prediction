@@ -4,6 +4,13 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 
+try:
+    import joblib
+    JOBLIB_AVAILABLE = True
+except ImportError:
+    JOBLIB_AVAILABLE = False
+    print(" Warning: joblib not installed. XGBoost and LightGBM models will not be available.")
+
 class LoyaltyPredictionPipeline:
     def __init__(self, models_dir='./models/saved_models/Random Forest', xgb_models_dir='./models/saved_models/XGBoost', lgb_models_dir='./models/saved_models/lightgbm'):
         self.models_dir = Path(models_dir)
@@ -42,31 +49,33 @@ class LoyaltyPredictionPipeline:
                 self.metadata = pickle.load(f)
             print("✓ Metadata cargada")
 
-            try:
-                import joblib
-                xgb_path = self.xgb_models_dir / 'best_xgb_model.joblib'
-                if xgb_path.exists():
-                    self.xgb_model = joblib.load(xgb_path)
-                    print("✓ Modelo XGBoost (Best Model) cargado")
-                else:
-                    print("⚠ Modelo XGBoost no encontrado, continuando sin XGBoost")
-            except ImportError:
+            # Cargar XGBoost
+            if JOBLIB_AVAILABLE:
+                try:
+                    xgb_path = self.xgb_models_dir / 'best_xgb_model.joblib'
+                    if xgb_path.exists():
+                        self.xgb_model = joblib.load(xgb_path)
+                        print("✓ Modelo XGBoost (Best Model) cargado")
+                    else:
+                        print("⚠ Modelo XGBoost no encontrado, continuando sin XGBoost")
+                except Exception as e:
+                    print(f"⚠ Error cargando XGBoost: {str(e)}")
+            else:
                 print("⚠ joblib no disponible, saltando carga de XGBoost")
-            except Exception as e:
-                print(f"⚠ Error cargando XGBoost: {str(e)}")
 
-            try:
-                import joblib
-                lgb_path = self.lgb_models_dir / 'final_focal_bst_joblib.pkl'
-                if lgb_path.exists():
-                    self.lgb_model = joblib.load(lgb_path)
-                    print("✓ Modelo LightGBM (Final Focal) cargado")
-                else:
-                    print("⚠ Modelo LightGBM no encontrado, continuando sin LightGBM")
-            except ImportError:
+            # Cargar LightGBM
+            if JOBLIB_AVAILABLE:
+                try:
+                    lgb_path = self.lgb_models_dir / 'final_focal_bst_joblib.pkl'
+                    if lgb_path.exists():
+                        self.lgb_model = joblib.load(lgb_path)
+                        print("✓ Modelo LightGBM (Final Focal) cargado")
+                    else:
+                        print("⚠ Modelo LightGBM no encontrado, continuando sin LightGBM")
+                except Exception as e:
+                    print(f"⚠ Error cargando LightGBM: {str(e)}")
+            else:
                 print("⚠ joblib no disponible, saltando carga de LightGBM")
-            except Exception as e:
-                print(f"⚠ Error cargando LightGBM: {str(e)}")
 
         except Exception as e:
             raise Exception(f"Error cargando modelos: {str(e)}")
