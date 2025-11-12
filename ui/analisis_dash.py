@@ -451,6 +451,22 @@ def show_correlations(df_filtered):
 
     st.subheader("Matriz de Correlaciones")
 
+    # Diccionario de nombres descriptivos
+    column_labels = {
+        'age_range': 'Rango de edad',
+        'gender': 'Género',
+        'label': 'Recurrencia',
+        'activity_len': 'Longitud de actividad',
+        'actions_0': 'Clics/Vistas',
+        'actions_2': 'Añadir al carrito',
+        'actions_3': 'Compras',
+        'unique_items': 'Items únicos',
+        'unique_categories': 'Categorías únicas',
+        'unique_brands': 'Marcas únicas',
+        'day_span': 'Duración (días)',
+        'has_1111': 'Actividad Double 11'
+    }
+
     # Seleccionar variables numéricas
     numeric_cols = [
         'age_range', 'gender', 'label', 'activity_len',
@@ -465,17 +481,20 @@ def show_correlations(df_filtered):
     # Calcular correlación
     corr_matrix = df_corr.corr()
 
+    # Renombrar índices y columnas con nombres descriptivos
+    corr_matrix_labeled = corr_matrix.rename(index=column_labels, columns=column_labels)
+
     # Heatmap de correlación
     fig_corr = go.Figure(data=go.Heatmap(
-        z=corr_matrix.values,
-        x=corr_matrix.columns,
-        y=corr_matrix.columns,
+        z=corr_matrix_labeled.values,
+        x=corr_matrix_labeled.columns,
+        y=corr_matrix_labeled.columns,
         colorscale=[
             [0, '#FFFFFF'],
             [0.5, COLOR_PALETTE['secondary']],
             [1, COLOR_PALETTE['primary']]
         ],
-        text=corr_matrix.values.round(2),
+        text=corr_matrix_labeled.values.round(2),
         texttemplate='%{text}',
         textfont={"size": 10},
         colorbar=dict(title="Correlación")
@@ -490,9 +509,9 @@ def show_correlations(df_filtered):
     st.plotly_chart(fig_corr, use_container_width=True)
 
     # Correlación con label
-    st.subheader("Correlación con Variable Objetivo (Label)")
+    st.subheader("Correlación con Variable Objetivo (Recurrencia)")
 
-    label_corr = corr_matrix['label'].drop('label').sort_values(ascending=True)
+    label_corr = corr_matrix_labeled['Recurrencia'].drop('Recurrencia').sort_values(ascending=True)
 
     fig_label_corr = go.Figure(data=[
         go.Bar(
@@ -526,14 +545,16 @@ def show_correlations(df_filtered):
         x_var = st.selectbox(
             "Variable X:",
             options=numeric_cols,
-            index=numeric_cols.index('activity_len')
+            index=numeric_cols.index('activity_len'),
+            format_func=lambda x: column_labels[x]
         )
 
     with col2:
         y_var = st.selectbox(
             "Variable Y:",
             options=numeric_cols,
-            index=numeric_cols.index('actions_3')
+            index=numeric_cols.index('actions_3'),
+            format_func=lambda x: column_labels[x]
         )
 
     # Crear scatter plot con muestreo inteligente
@@ -556,8 +577,12 @@ def show_correlations(df_filtered):
             'Recurrente': COLOR_PALETTE['primary']
         },
         opacity=0.6,
-        title=f"Relación entre {x_var} y {y_var}",
-        labels={'label_text': 'Tipo de Cliente'}
+        title=f"Relación entre {column_labels[x_var]} y {column_labels[y_var]}",
+        labels={
+            'label_text': 'Tipo de Cliente',
+            x_var: column_labels[x_var],
+            y_var: column_labels[y_var]
+        }
     )
 
     fig_scatter.update_layout(height=500)
