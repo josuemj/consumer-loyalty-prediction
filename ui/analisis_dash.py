@@ -392,53 +392,59 @@ def show_distributions(df_filtered):
     )
     st.plotly_chart(fig_actions, use_container_width=True)
 
-    # Fila 4: Diversidad (items, categorías, marcas)
-    col5, col6, col7 = st.columns(3)
+    # Fila 4: Diversidad (items, categorías, marcas) - Treemaps
+    st.subheader("Distribución de Diversidad de Productos")
 
-    with col5:
-        fig_items = go.Figure(data=[
-            go.Box(
-                y=df_filtered['unique_items'],
-                marker_color=COLOR_PALETTE['primary'],
-                name='Items Únicos'
-            )
-        ])
-        fig_items.update_layout(
-            title="Distribución de Items Únicos",
-            yaxis_title="Cantidad",
-            height=350
-        )
-        st.plotly_chart(fig_items, use_container_width=True)
+    # Agrupar por cantidad de items únicos y contar frecuencias
+    items_dist = df_filtered['unique_items'].value_counts().reset_index()
+    items_dist.columns = ['Cantidad', 'Frecuencia']
+    items_dist['Label'] = items_dist['Cantidad'].astype(str) + ' items'
 
-    with col6:
-        fig_categories = go.Figure(data=[
-            go.Box(
-                y=df_filtered['unique_categories'],
-                marker_color=COLOR_PALETTE['secondary'],
-                name='Categorías Únicas'
-            )
-        ])
-        fig_categories.update_layout(
-            title="Distribución de Categorías Únicas",
-            yaxis_title="Cantidad",
-            height=350
-        )
-        st.plotly_chart(fig_categories, use_container_width=True)
+    fig_items = px.treemap(
+        items_dist,
+        path=['Label'],
+        values='Frecuencia',
+        color='Cantidad',
+        color_continuous_scale=['#FFA07A', '#FF8C42', '#FF6347', '#FF4B4B'],
+        title="Distribución de Items Únicos"
+    )
+    fig_items.update_layout(height=400)
+    fig_items.update_traces(textinfo="label+value")
+    st.plotly_chart(fig_items, use_container_width=True)
 
-    with col7:
-        fig_brands = go.Figure(data=[
-            go.Box(
-                y=df_filtered['unique_brands'],
-                marker_color=COLOR_PALETTE['tertiary'],
-                name='Marcas Únicas'
-            )
-        ])
-        fig_brands.update_layout(
-            title="Distribución de Marcas Únicas",
-            yaxis_title="Cantidad",
-            height=350
-        )
-        st.plotly_chart(fig_brands, use_container_width=True)
+    # Agrupar por cantidad de categorías únicas y contar frecuencias
+    cat_dist = df_filtered['unique_categories'].value_counts().reset_index()
+    cat_dist.columns = ['Cantidad', 'Frecuencia']
+    cat_dist['Label'] = cat_dist['Cantidad'].astype(str) + ' categorías'
+
+    fig_categories = px.treemap(
+        cat_dist,
+        path=['Label'],
+        values='Frecuencia',
+        color='Cantidad',
+        color_continuous_scale=['#FFA07A', '#FF8C42', '#FF6347', '#FF4B4B'],
+        title="Distribución de Categorías Únicas"
+    )
+    fig_categories.update_layout(height=400)
+    fig_categories.update_traces(textinfo="label+value")
+    st.plotly_chart(fig_categories, use_container_width=True)
+
+    # Agrupar por cantidad de marcas únicas y contar frecuencias
+    brands_dist = df_filtered['unique_brands'].value_counts().reset_index()
+    brands_dist.columns = ['Cantidad', 'Frecuencia']
+    brands_dist['Label'] = brands_dist['Cantidad'].astype(str) + ' marcas'
+
+    fig_brands = px.treemap(
+        brands_dist,
+        path=['Label'],
+        values='Frecuencia',
+        color='Cantidad',
+        color_continuous_scale=['#FFA07A', '#FF8C42', '#FF6347', '#FF4B4B'],
+        title="Distribución de Marcas Únicas"
+    )
+    fig_brands.update_layout(height=400)
+    fig_brands.update_traces(textinfo="label+value")
+    st.plotly_chart(fig_brands, use_container_width=True)
 
 def show_correlations(df_filtered):
     """Visualizaciones de correlaciones"""
