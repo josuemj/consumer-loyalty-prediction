@@ -895,48 +895,35 @@ def show_rf_feature_importance(pipeline):
             # Normalizar importancias
             importance_df['importance_norm'] = importance_df['importance'] / importance_df['importance'].max()
 
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                fig = go.Figure(data=[
-                    go.Bar(
-                        y=importance_df['feature'],
-                        x=importance_df['importance'],
-                        orientation='h',
-                        marker_color=COLOR_PALETTE['primary'],
-                        text=importance_df['importance'].round(4),
-                        textposition='auto',
-                        hovertemplate='<b>%{y}</b><br>Importancia: %{x:.4f}<br>Normalizada: %{customdata:.2%}<extra></extra>',
-                        customdata=importance_df['importance_norm']
-                    )
-                ])
-
-                fig.update_layout(
-                    title="🔝 Top 15 Features - Random Forest (All Features)",
-                    xaxis_title="Importancia",
-                    yaxis_title="Feature",
-                    height=600
+            fig = go.Figure(data=[
+                go.Bar(
+                    y=importance_df['feature'],
+                    x=importance_df['importance'],
+                    orientation='h',
+                    marker_color=COLOR_PALETTE['primary'],
+                    text=importance_df['importance'].round(4),
+                    textposition='auto',
+                    hovertemplate='<b>%{y}</b><br>Importancia: %{x:.4f}<br>Normalizada: %{customdata:.2%}<extra></extra>',
+                    customdata=importance_df['importance_norm']
                 )
+            ])
 
-                st.plotly_chart(fig, use_container_width=True)
+            fig.update_layout(
+                title="🔝 Top 15 Features - Random Forest (All Features)",
+                xaxis_title="Importancia",
+                yaxis_title="Feature",
+                height=600
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
             
-            with col2:
-                st.markdown("### 📊 Top 5 Features")
-                for idx, (_, row) in enumerate(importance_df.head(5).iterrows(), 1):
-                    percentage = row['importance_norm'] * 100
-                    st.metric(
-                        label=f"{idx}. {row['feature']}",
-                        value=f"{row['importance']:.4f}",
-                        delta=f"{percentage:.1f}%"
-                    )
-                    
-                st.markdown("### 💡 Interpretación")
-                st.markdown("""
-                **Random Forest** promedia múltiples árboles:
-                - **Más estable** que modelos individuales
-                - **Basado en splits** de decisión
-                - **Ensemble** de predictores diversos
-                """)
+            st.markdown("### 💡 Interpretación")
+            st.markdown("""
+            **Random Forest** promedia múltiples árboles:
+            - **Más estable** que modelos individuales
+            - **Basado en splits** de decisión
+            - **Ensemble** de predictores diversos
+            """)
         else:
             st.warning("Feature importances no disponibles para Random Forest")
     else:
@@ -955,48 +942,35 @@ def show_xgb_feature_importance_from_csv():
             # Normalizar importancias para mejor visualización
             importance_df['importance_norm'] = importance_df['importance'] / importance_df['importance'].max()
             
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                fig = go.Figure(data=[
-                    go.Bar(
-                        y=importance_df['feature'],
-                        x=importance_df['importance'],
-                        orientation='h',
-                        marker_color=COLOR_PALETTE['secondary'],
-                        text=importance_df['importance'].round(4),
-                        textposition='auto',
-                        hovertemplate='<b>%{y}</b><br>Importancia: %{x:.4f}<br>Normalizada: %{customdata:.2%}<extra></extra>',
-                        customdata=importance_df['importance_norm']
-                    )
-                ])
-                
-                fig.update_layout(
-                    title="🔝 Top 15 Features - XGBoost",
-                    xaxis_title="Importancia",
-                    yaxis_title="Feature",
-                    height=600
+            fig = go.Figure(data=[
+                go.Bar(
+                    y=importance_df['feature'],
+                    x=importance_df['importance'],
+                    orientation='h',
+                    marker_color=COLOR_PALETTE['secondary'],
+                    text=importance_df['importance'].round(4),
+                    textposition='auto',
+                    hovertemplate='<b>%{y}</b><br>Importancia: %{x:.4f}<br>Normalizada: %{customdata:.2%}<extra></extra>',
+                    customdata=importance_df['importance_norm']
                 )
-                
-                st.plotly_chart(fig, use_container_width=True)
+            ])
             
-            with col2:
-                st.markdown("### 📊 Top 5 Features")
-                for idx, (_, row) in enumerate(importance_df.head(5).iterrows(), 1):
-                    percentage = row['importance_norm'] * 100
-                    st.metric(
-                        label=f"{idx}. {row['feature']}",
-                        value=f"{row['importance']:.4f}",
-                        delta=f"{percentage:.1f}%"
-                    )
-                    
-                st.markdown("### 💡 Interpretación")
-                st.markdown("""
-                **XGBoost** usa importancia basada en ganancia:
-                - **Mayor valor** = más importante para decisiones
-                - **actions_0** (vistas) suele ser muy relevante
-                - **merchant_id** puede indicar patrones específicos
-                """)
+            fig.update_layout(
+                title="🔝 Top 15 Features - XGBoost",
+                xaxis_title="Importancia",
+                yaxis_title="Feature",
+                height=600
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown("### 💡 Interpretación")
+            st.markdown("""
+            **XGBoost** usa importancia basada en ganancia:
+            - **Mayor valor** = más importante para decisiones
+            - **actions_0** (vistas) suele ser muy relevante
+            - **merchant_id** puede indicar patrones específicos
+            """)
         else:
             st.error(f"❌ Archivo no encontrado: {xgb_csv_path}")
             
@@ -1016,49 +990,35 @@ def show_lgb_feature_importance_from_csv():
             # Normalizar importancias
             importance_df['importance_norm'] = importance_df['importance'] / importance_df['importance'].max()
             
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                fig = go.Figure(data=[
-                    go.Bar(
-                        y=importance_df['feature'],
-                        x=importance_df['importance'],
-                        orientation='h',
-                        marker_color=COLOR_PALETTE['tertiary'],
-                        text=importance_df['importance'].round(0),
-                        textposition='auto',
-                        hovertemplate='<b>%{y}</b><br>Importancia: %{x:.0f}<br>Normalizada: %{customdata:.2%}<extra></extra>',
-                        customdata=importance_df['importance_norm']
-                    )
-                ])
-                
-                fig.update_layout(
-                    title="🔝 Top 15 Features - LightGBM (Focal Loss)",
-                    xaxis_title="Importancia",
-                    yaxis_title="Feature",
-                    height=600
+            fig = go.Figure(data=[
+                go.Bar(
+                    y=importance_df['feature'],
+                    x=importance_df['importance_norm'],
+                    orientation='h',
+                    marker_color=COLOR_PALETTE['tertiary'],
+                    text=importance_df['importance_norm'].round(3),
+                    textposition='auto',
+                    hovertemplate='<b>%{y}</b><br>Importancia Original: %{customdata:.0f}<br>Normalizada: %{x:.3f}<extra></extra>',
+                    customdata=importance_df['importance']
                 )
-                
-                st.plotly_chart(fig, use_container_width=True)
+            ])
             
-            with col2:
-                st.markdown("### 📊 Top 5 Features")
-                total_importance = importance_df['importance'].sum()
-                for idx, (_, row) in enumerate(importance_df.head(5).iterrows(), 1):
-                    percentage = (row['importance'] / total_importance) * 100
-                    st.metric(
-                        label=f"{idx}. {row['feature']}",
-                        value=f"{row['importance']:.0f}",
-                        delta=f"{percentage:.1f}%"
-                    )
-                    
-                st.markdown("### 💡 Interpretación")
-                st.markdown("""
-                **LightGBM** (Focal Loss) enfocado en casos difíciles:
-                - **merchant_freq** es clave (frecuencia del merchant)
-                - **unique_items** indica diversidad de productos
-                - **Focal Loss** mejora detección de recurrentes
-                """)
+            fig.update_layout(
+                title="🔝 Top 15 Features - LightGBM (Focal Loss) - Escala Normalizada",
+                xaxis_title="Importancia (Normalizada 0-1)",
+                yaxis_title="Feature",
+                height=600
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown("### 💡 Interpretación")
+            st.markdown("""
+            **LightGBM** (Focal Loss) enfocado en casos difíciles:
+            - **merchant_freq** es clave (frecuencia del merchant)
+            - **unique_items** indica diversidad de productos
+            - **Focal Loss** mejora detección de recurrentes
+            """)
         else:
             st.error(f"❌ Archivo no encontrado: {lgb_csv_path}")
             
