@@ -456,7 +456,7 @@ def show_correlations(df_filtered):
         'age_range': 'Rango de edad',
         'gender': 'Género',
         'label': 'Recurrencia',
-        'activity_len': 'Longitud de actividad',
+        'activity_len': 'Cantidad de actividades',
         'actions_0': 'Clics/Vistas',
         'actions_2': 'Añadir al carrito',
         'actions_3': 'Compras',
@@ -519,7 +519,7 @@ def show_correlations(df_filtered):
             y=label_corr.index,
             orientation='h',
             marker_color=[
-                COLOR_PALETTE['primary'] if x > 0 else COLOR_PALETTE['secondary']
+                COLOR_PALETTE['non_recurrent'] if x > 0 else COLOR_PALETTE['secondary']
                 for x in label_corr.values
             ],
             text=label_corr.values.round(3),
@@ -593,48 +593,45 @@ def show_temporal_analysis(df_filtered):
 
     st.subheader("Análisis Temporal de Interacciones")
 
-    # Distribución de day_span
-    col1, col2 = st.columns(2)
-
-    with col1:
-        fig_span = go.Figure(data=[
-            go.Histogram(
-                x=df_filtered['day_span'],
-                nbinsx=50,
-                marker_color=COLOR_PALETTE['primary'],
-                opacity=0.7
-            )
-        ])
-        fig_span.update_layout(
-            title="Distribución de Duración de Actividad (días)",
-            xaxis_title="Días entre primera y última interacción",
-            yaxis_title="Frecuencia",
-            height=400
+    # with col1:
+    fig_span = go.Figure(data=[
+        go.Histogram(
+            x=df_filtered['day_span'],
+            nbinsx=50,
+            marker_color=COLOR_PALETTE['primary'],
+            opacity=0.7
         )
-        st.plotly_chart(fig_span, use_container_width=True)
+    ])
+    fig_span.update_layout(
+        title="Distribución de Duración de Actividad (días)",
+        xaxis_title="Días entre primera y última interacción",
+        yaxis_title="Frecuencia",
+        height=400
+    )
+    st.plotly_chart(fig_span, use_container_width=True)
 
-    with col2:
-        # Day span por label
-        df_temp = df_filtered[df_filtered['label'] != -1].copy()
-        df_temp['label_text'] = df_temp['label'].map({0: 'No Recurrente', 1: 'Recurrente'})
+    # with col2:
+    #     # Day span por label
+    #     df_temp = df_filtered[df_filtered['label'] != -1].copy()
+    #     df_temp['label_text'] = df_temp['label'].map({0: 'No Recurrente', 1: 'Recurrente'})
 
-        fig_span_label = go.Figure()
+    #     fig_span_label = go.Figure()
 
-        for label, color in [('No Recurrente', COLOR_PALETTE['secondary']),
-                             ('Recurrente', COLOR_PALETTE['primary'])]:
-            data = df_temp[df_temp['label_text'] == label]['day_span']
-            fig_span_label.add_trace(go.Box(
-                y=data,
-                name=label,
-                marker_color=color
-            ))
+    #     for label, color in [('No Recurrente', COLOR_PALETTE['secondary']),
+    #                          ('Recurrente', COLOR_PALETTE['primary'])]:
+    #         data = df_temp[df_temp['label_text'] == label]['day_span']
+    #         fig_span_label.add_trace(go.Box(
+    #             y=data,
+    #             name=label,
+    #             marker_color=color
+    #         ))
 
-        fig_span_label.update_layout(
-            title="Duración de Actividad por Tipo de Cliente",
-            yaxis_title="Días",
-            height=400
-        )
-        st.plotly_chart(fig_span_label, use_container_width=True)
+    #     fig_span_label.update_layout(
+    #         title="Duración de Actividad por Tipo de Cliente",
+    #         yaxis_title="Días",
+    #         height=400
+    #     )
+    #     st.plotly_chart(fig_span_label, use_container_width=True)
 
     # Actividad por mes
     st.subheader("Actividad por Periodo")
