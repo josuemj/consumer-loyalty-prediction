@@ -81,11 +81,11 @@ def show_predicciones():
             st.write(model)
 
     # Tabs principales
-    tab_single, tab_batch, tab_comparison, tab_performance = st.tabs([
+    tab_single, tab_batch, tab_comparison, tab_features = st.tabs([
         "🎯 Predicción Individual",
         "📊 Predicción en Lote",
         "⚖️ Comparación de Modelos",
-        "📈 Performance de Modelos"
+        "🔝 Feature Importance"
     ])
 
     with tab_single:
@@ -97,8 +97,8 @@ def show_predicciones():
     with tab_comparison:
         show_model_comparison(pipeline)
 
-    with tab_performance:
-        show_model_performance(pipeline)
+    with tab_features:
+        show_feature_importance_analysis(pipeline)
 
 def show_single_prediction(pipeline):
     """Interfaz para predicción individual"""
@@ -848,38 +848,38 @@ def display_confusion_matrices(results, true_labels):
             - **Exactitud:** {accuracy:.3f}
             """, unsafe_allow_html=True)
 
-def show_model_performance(pipeline):
-    """Mostrar métricas de performance de modelos"""
+def show_feature_importance_analysis(pipeline):
+    """Mostrar análisis de importancia de features para todos los modelos"""
 
-    st.subheader("📈 Performance y Métricas de Modelos")
+    st.subheader("🔝 Análisis de Feature Importance")
 
     st.info("""
-    Esta sección muestra métricas de performance pre-calculadas de los modelos.
-    Para métricas en tiempo real, necesitamos un conjunto de validación con labels conocidos.
+    **Feature Importance** muestra qué características del cliente son más importantes para cada modelo.
+    Esto ayuda a entender **qué factores influyen más** en las predicciones de lealtad.
     """)
 
-    # Mostrar feature importance
-    st.markdown("### 🔝 Features Más Importantes")
-
-    tab_rf, tab_xgb, tab_lgb = st.tabs(["Random Forest", "XGBoost", "LightGBM"])
+    # Tabs para cada modelo
+    tab_rf, tab_xgb, tab_lgb, tab_comparison = st.tabs([
+        "🌲 Random Forest", 
+        "⚡ XGBoost", 
+        "💡 LightGBM",
+        "📊 Comparación"
+    ])
 
     with tab_rf:
         show_rf_feature_importance(pipeline)
 
     with tab_xgb:
-        if pipeline.xgb_model is not None:
-            show_xgb_feature_importance(pipeline)
-        else:
-            st.warning("Modelo XGBoost no cargado")
+        show_xgb_feature_importance_from_csv()
 
     with tab_lgb:
-        if pipeline.lgb_model is not None:
-            show_lgb_feature_importance(pipeline)
-        else:
-            st.warning("Modelo LightGBM no cargado")
+        show_lgb_feature_importance_from_csv()
+        
+    with tab_comparison:
+        show_feature_importance_comparison()
 
 def show_rf_feature_importance(pipeline):
-    """Mostrar feature importance de Random Forest"""
+    """Mostrar feature importance de Random Forest mejorado"""
 
     if pipeline.metadata and 'all_features' in pipeline.metadata:
         features = pipeline.metadata['all_features']
@@ -888,101 +888,261 @@ def show_rf_feature_importance(pipeline):
             importances = pipeline.rf_all.feature_importances_
 
             importance_df = pd.DataFrame({
-                'Feature': features,
-                'Importance': importances
-            }).sort_values('Importance', ascending=False).head(15)
+                'feature': features,
+                'importance': importances
+            }).sort_values('importance', ascending=False).head(15)
+            
+            # Normalizar importancias
+            importance_df['importance_norm'] = importance_df['importance'] / importance_df['importance'].max()
 
-            fig = go.Figure(data=[
-                go.Bar(
-                    y=importance_df['Feature'],
-                    x=importance_df['Importance'],
-                    orientation='h',
-                    marker_color=COLOR_PALETTE['primary'],
-                    text=importance_df['Importance'].round(4),
-                    textposition='auto',
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                fig = go.Figure(data=[
+                    go.Bar(
+                        y=importance_df['feature'],
+                        x=importance_df['importance'],
+                        orientation='h',
+                        marker_color=COLOR_PALETTE['primary'],
+                        text=importance_df['importance'].round(4),
+                        textposition='auto',
+                        hovertemplate='<b>%{y}</b><br>Importancia: %{x:.4f}<br>Normalizada: %{customdata:.2%}<extra></extra>',
+                        customdata=importance_df['importance_norm']
+                    )
+                ])
+
+                fig.update_layout(
+                    title="🔝 Top 15 Features - Random Forest (All Features)",
+                    xaxis_title="Importancia",
+                    yaxis_title="Feature",
+                    height=600
                 )
-            ])
 
-            fig.update_layout(
-                title="Top 15 Features - Random Forest (All Features)",
-                xaxis_title="Importancia",
-                yaxis_title="Feature",
-                height=500
-            )
-
-            st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                st.markdown("### 📊 Top 5 Features")
+                for idx, (_, row) in enumerate(importance_df.head(5).iterrows(), 1):
+                    percentage = row['importance_norm'] * 100
+                    st.metric(
+                        label=f"{idx}. {row['feature']}",
+                        value=f"{row['importance']:.4f}",
+                        delta=f"{percentage:.1f}%"
+                    )
+                    
+                st.markdown("### 💡 Interpretación")
+                st.markdown("""
+                **Random Forest** promedia múltiples árboles:
+                - **Más estable** que modelos individuales
+                - **Basado en splits** de decisión
+                - **Ensemble** de predictores diversos
+                """)
         else:
-            st.warning("Feature importances no disponibles")
+            st.warning("Feature importances no disponibles para Random Forest")
     else:
-        st.warning("Metadata no disponible")
+        st.warning("Metadata no disponible para Random Forest")
 
-def show_xgb_feature_importance(pipeline):
-    """Mostrar feature importance de XGBoost"""
+def show_xgb_feature_importance_from_csv():
+    """Mostrar feature importance de XGBoost cargado desde CSV"""
+    
+    xgb_csv_path = project_root / 'models' / 'saved_models' / 'analysis' / 'fi_best_xgb_model.csv'
+    
+    try:
+        if xgb_csv_path.exists():
+            importance_df = pd.read_csv(xgb_csv_path)
+            importance_df = importance_df.sort_values('importance', ascending=False).head(15)
+            
+            # Normalizar importancias para mejor visualización
+            importance_df['importance_norm'] = importance_df['importance'] / importance_df['importance'].max()
+            
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                fig = go.Figure(data=[
+                    go.Bar(
+                        y=importance_df['feature'],
+                        x=importance_df['importance'],
+                        orientation='h',
+                        marker_color=COLOR_PALETTE['secondary'],
+                        text=importance_df['importance'].round(4),
+                        textposition='auto',
+                        hovertemplate='<b>%{y}</b><br>Importancia: %{x:.4f}<br>Normalizada: %{customdata:.2%}<extra></extra>',
+                        customdata=importance_df['importance_norm']
+                    )
+                ])
+                
+                fig.update_layout(
+                    title="🔝 Top 15 Features - XGBoost",
+                    xaxis_title="Importancia",
+                    yaxis_title="Feature",
+                    height=600
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                st.markdown("### 📊 Top 5 Features")
+                for idx, (_, row) in enumerate(importance_df.head(5).iterrows(), 1):
+                    percentage = row['importance_norm'] * 100
+                    st.metric(
+                        label=f"{idx}. {row['feature']}",
+                        value=f"{row['importance']:.4f}",
+                        delta=f"{percentage:.1f}%"
+                    )
+                    
+                st.markdown("### 💡 Interpretación")
+                st.markdown("""
+                **XGBoost** usa importancia basada en ganancia:
+                - **Mayor valor** = más importante para decisiones
+                - **actions_0** (vistas) suele ser muy relevante
+                - **merchant_id** puede indicar patrones específicos
+                """)
+        else:
+            st.error(f"❌ Archivo no encontrado: {xgb_csv_path}")
+            
+    except Exception as e:
+        st.error(f"Error cargando feature importance de XGBoost: {str(e)}")
 
-    if hasattr(pipeline.xgb_model, 'feature_importances_'):
-        importances = pipeline.xgb_model.feature_importances_
-        features = pipeline.xgb_features
+def show_lgb_feature_importance_from_csv():
+    """Mostrar feature importance de LightGBM cargado desde CSV"""
+    
+    lgb_csv_path = project_root / 'models' / 'saved_models' / 'lightgbm' / 'feature_importance.csv'
+    
+    try:
+        if lgb_csv_path.exists():
+            importance_df = pd.read_csv(lgb_csv_path)
+            importance_df = importance_df.sort_values('importance', ascending=False).head(15)
+            
+            # Normalizar importancias
+            importance_df['importance_norm'] = importance_df['importance'] / importance_df['importance'].max()
+            
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                fig = go.Figure(data=[
+                    go.Bar(
+                        y=importance_df['feature'],
+                        x=importance_df['importance'],
+                        orientation='h',
+                        marker_color=COLOR_PALETTE['tertiary'],
+                        text=importance_df['importance'].round(0),
+                        textposition='auto',
+                        hovertemplate='<b>%{y}</b><br>Importancia: %{x:.0f}<br>Normalizada: %{customdata:.2%}<extra></extra>',
+                        customdata=importance_df['importance_norm']
+                    )
+                ])
+                
+                fig.update_layout(
+                    title="🔝 Top 15 Features - LightGBM (Focal Loss)",
+                    xaxis_title="Importancia",
+                    yaxis_title="Feature",
+                    height=600
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with col2:
+                st.markdown("### 📊 Top 5 Features")
+                total_importance = importance_df['importance'].sum()
+                for idx, (_, row) in enumerate(importance_df.head(5).iterrows(), 1):
+                    percentage = (row['importance'] / total_importance) * 100
+                    st.metric(
+                        label=f"{idx}. {row['feature']}",
+                        value=f"{row['importance']:.0f}",
+                        delta=f"{percentage:.1f}%"
+                    )
+                    
+                st.markdown("### 💡 Interpretación")
+                st.markdown("""
+                **LightGBM** (Focal Loss) enfocado en casos difíciles:
+                - **merchant_freq** es clave (frecuencia del merchant)
+                - **unique_items** indica diversidad de productos
+                - **Focal Loss** mejora detección de recurrentes
+                """)
+        else:
+            st.error(f"❌ Archivo no encontrado: {lgb_csv_path}")
+            
+    except Exception as e:
+        st.error(f"Error cargando feature importance de LightGBM: {str(e)}")
 
-        importance_df = pd.DataFrame({
-            'Feature': features,
-            'Importance': importances
-        }).sort_values('Importance', ascending=False)
-
-        fig = go.Figure(data=[
-            go.Bar(
-                y=importance_df['Feature'],
-                x=importance_df['Importance'],
-                orientation='h',
-                marker_color=COLOR_PALETTE['secondary'],
-                text=importance_df['Importance'].round(4),
-                textposition='auto',
-            )
-        ])
-
-        fig.update_layout(
-            title="Feature Importance - XGBoost",
-            xaxis_title="Importancia",
-            yaxis_title="Feature",
-            height=500
+def show_feature_importance_comparison():
+    """Comparación de feature importance entre todos los modelos"""
+    
+    st.markdown("### 🔍 Comparación de Features Importantes")
+    st.info("Esta comparación muestra las features más importantes de cada modelo lado a lado para identificar patrones comunes.")
+    
+    # Cargar datos de todos los modelos
+    all_features = {}
+    
+    # XGBoost
+    xgb_path = project_root / 'models' / 'saved_models' / 'analysis' / 'fi_best_xgb_model.csv'
+    if xgb_path.exists():
+        xgb_df = pd.read_csv(xgb_path).head(10)
+        xgb_df['model'] = 'XGBoost'
+        all_features['XGBoost'] = xgb_df
+    
+    # LightGBM
+    lgb_path = project_root / 'models' / 'saved_models' / 'lightgbm' / 'feature_importance.csv'
+    if lgb_path.exists():
+        lgb_df = pd.read_csv(lgb_path).head(10)
+        lgb_df['model'] = 'LightGBM'
+        # Normalizar LightGBM para comparación
+        lgb_df['importance_norm'] = lgb_df['importance'] / lgb_df['importance'].max()
+        all_features['LightGBM'] = lgb_df
+    
+    # Random Forest (si está disponible)
+    pipeline = load_pipeline()
+    if pipeline and pipeline.metadata and 'all_features' in pipeline.metadata:
+        if hasattr(pipeline.rf_all, 'feature_importances_'):
+            rf_df = pd.DataFrame({
+                'feature': pipeline.metadata['all_features'],
+                'importance': pipeline.rf_all.feature_importances_
+            }).sort_values('importance', ascending=False).head(10)
+            rf_df['model'] = 'Random Forest'
+            all_features['Random Forest'] = rf_df
+    
+    if len(all_features) >= 2:
+        # Gráfico de comparación lado a lado
+        fig = make_subplots(
+            rows=1, cols=len(all_features),
+            subplot_titles=list(all_features.keys()),
+            shared_yaxes=False
         )
-
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("Feature importances no disponibles para XGBoost")
-
-def show_lgb_feature_importance(pipeline):
-    """Mostrar feature importance de LightGBM"""
-
-    if hasattr(pipeline.lgb_model, 'feature_importances_'):
-        importances = pipeline.lgb_model.feature_importances_
-        features = pipeline.lgb_features
-
-        importance_df = pd.DataFrame({
-            'Feature': features,
-            'Importance': importances
-        }).sort_values('Importance', ascending=False)
-
-        fig = go.Figure(data=[
-            go.Bar(
-                y=importance_df['Feature'],
-                x=importance_df['Importance'],
-                orientation='h',
-                marker_color=COLOR_PALETTE['tertiary'],
-                text=importance_df['Importance'].round(4),
-                textposition='auto',
+        
+        colors = [COLOR_PALETTE['primary'], COLOR_PALETTE['secondary'], COLOR_PALETTE['tertiary']]
+        
+        for idx, (model_name, df) in enumerate(all_features.items()):
+            # Normalizar importancias para comparación visual
+            df_norm = df.copy()
+            df_norm['importance_viz'] = df_norm['importance'] / df_norm['importance'].max()
+            
+            fig.add_trace(
+                go.Bar(
+                    y=df_norm['feature'],
+                    x=df_norm['importance_viz'],
+                    orientation='h',
+                    marker_color=colors[idx % len(colors)],
+                    name=model_name,
+                    showlegend=False,
+                    text=df_norm['importance_viz'].round(3),
+                    textposition='auto'
+                ),
+                row=1, col=idx+1
             )
-        ])
-
+        
         fig.update_layout(
-            title="Feature Importance - LightGBM (Focal Loss)",
-            xaxis_title="Importancia",
-            yaxis_title="Feature",
-            height=500
+            title="📊 Comparación de Top 10 Features por Modelo (Normalizadas)",
+            height=600
         )
-
+        
+        for i in range(len(all_features)):
+            fig.update_xaxes(title_text="Importancia (Normalizada)", row=1, col=i+1)
+        
         st.plotly_chart(fig, use_container_width=True)
+        
+    
     else:
-        st.warning("Feature importances no disponibles para LightGBM")
+        st.warning("⚠️ Se necesitan al menos 2 modelos para comparar")
 
 def generate_synthetic_data(n_samples):
     """Generar datos sintéticos para pruebas"""

@@ -435,7 +435,7 @@ def show_distributions(df_filtered):
         path=['Label'],
         values='Frecuencia',
         color='Cantidad',
-        color_continuous_scale=['#E8F5E8', '#4CAF50', '#1B5E20'],  # Verde claro a verde muy oscuro
+        color_continuous_scale=['#E3F2FD', '#42A5F5', '#1565C0'],  # Azul claro a azul medio oscuro
         title="Distribución de Categorías Únicas"
     )
     fig_categories.update_layout(
@@ -460,7 +460,7 @@ def show_distributions(df_filtered):
         path=['Label'],
         values='Frecuencia',
         color='Cantidad',
-        color_continuous_scale=['#FFF3E0', '#FF9800', '#E65100'],  # Naranja claro a naranja muy oscuro
+        color_continuous_scale=['#E8F4FD', '#29B6F6', '#0277BD'],  # Azul muy claro a azul celeste oscuro
         title="Distribución de Marcas Únicas"
     )
     fig_brands.update_layout(
