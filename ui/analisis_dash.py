@@ -6,16 +6,19 @@ from plotly.subplots import make_subplots
 import numpy as np
 from pathlib import Path
 
-# Paleta de colores rojo-naranja
+# Paleta de colores azules
 COLOR_PALETTE = {
-    'primary': '#FF4B4B',      # Rojo
-    'secondary': '#FF8C42',    # Naranja
-    'tertiary': '#FFA07A',     # Salmón claro
-    'quaternary': '#FF6347',   # Tomate
-    'background': '#FFF5F0',   # Fondo claro
-    'recurrent': '#FF4B4B',    # Rojo para recurrentes
-    'non_recurrent': '#FF8C42', # Naranja para no recurrentes
-    'unknown': '#CCCCCC'       # Gris para desconocidos
+    'primary':       "#0082C8",  # Azul intenso (color principal)
+    'secondary':     "#006789",  # Azul medio
+    'tertiary':      "#49DBF9",  # Celeste suave
+    'quaternary':    "#90E0EF",  # Azul pastel
+    'dark_orange':   "#00A896",  # Verde aqua profundo (nuevo énfasis)
+    
+    'background':    "#E6F7F9",  # Fondo azul muy claro
+    
+    'recurrent':     "#0A9396",  # Verde-azulado fuerte (Recurrente)
+    'non_recurrent': "#8ECAE6",  # Celeste claro (No recurrente)
+    'unknown':       "#A8BFCB"   # Gris azulado (Desconocidos)
 }
 
 @st.cache_data
@@ -153,8 +156,9 @@ def show_analisis():
 
     # Filtro de género
     gender_labels = create_gender_labels()
+    st.sidebar.markdown(f'<p style="color:{COLOR_PALETTE["dark_orange"]}; font-weight:bold; margin-bottom:5px;">Género:</p>', unsafe_allow_html=True)
     selected_genders = st.sidebar.multiselect(
-        "Género:",
+        "",  # Etiqueta vacía ya que usamos markdown arriba
         options=list(gender_labels.keys()),
         default=list(gender_labels.keys()),
         format_func=lambda x: gender_labels[x]
@@ -163,8 +167,9 @@ def show_analisis():
 
     # Filtro de rango de edad
     age_labels = create_age_range_labels()
+    st.sidebar.markdown(f'<p style="color:{COLOR_PALETTE["dark_orange"]}; font-weight:bold; margin-bottom:5px;">Rango de edad:</p>', unsafe_allow_html=True)
     selected_ages = st.sidebar.multiselect(
-        "Rango de edad:",
+        "",  # Etiqueta vacía ya que usamos markdown arriba
         options=list(age_labels.keys()),
         default=list(age_labels.keys()),
         format_func=lambda x: age_labels[x]
@@ -292,7 +297,7 @@ def show_distributions(df_filtered):
             )
         ])
         fig_gender.update_layout(
-            title="Distribución por Género",
+            title=f"<span style='color:{COLOR_PALETTE['dark_orange']}; font-weight:bold'>Distribución por Género</span>",
             xaxis_title="Género",
             yaxis_title="Cantidad",
             height=400
@@ -314,7 +319,7 @@ def show_distributions(df_filtered):
             )
         ])
         fig_age.update_layout(
-            title="Distribución por Rango de Edad",
+            title=f"<span style='color:{COLOR_PALETTE['dark_orange']}; font-weight:bold'>Distribución por Rango de Edad</span>",
             xaxis_title="Rango de Edad",
             yaxis_title="Cantidad",
             height=400
@@ -405,10 +410,18 @@ def show_distributions(df_filtered):
         path=['Label'],
         values='Frecuencia',
         color='Cantidad',
-        color_continuous_scale=['#FFA07A', '#FF8C42', '#FF6347', '#FF4B4B'],
+        color_continuous_scale=['#E3F2FD', '#1976D2', '#0D47A1'],  # Azul claro a azul muy oscuro
         title="Distribución de Items Únicos"
     )
-    fig_items.update_layout(height=400)
+    fig_items.update_layout(
+        height=400,
+        coloraxis_colorbar=dict(
+            title="Cantidad",
+            tickmode="linear",
+            tick0=items_dist['Cantidad'].min(),
+            dtick=(items_dist['Cantidad'].max() - items_dist['Cantidad'].min()) / 4
+        )
+    )
     fig_items.update_traces(textinfo="label+value")
     st.plotly_chart(fig_items, use_container_width=True)
 
@@ -422,10 +435,18 @@ def show_distributions(df_filtered):
         path=['Label'],
         values='Frecuencia',
         color='Cantidad',
-        color_continuous_scale=['#FFA07A', '#FF8C42', '#FF6347', '#FF4B4B'],
+        color_continuous_scale=['#E8F5E8', '#4CAF50', '#1B5E20'],  # Verde claro a verde muy oscuro
         title="Distribución de Categorías Únicas"
     )
-    fig_categories.update_layout(height=400)
+    fig_categories.update_layout(
+        height=400,
+        coloraxis_colorbar=dict(
+            title="Cantidad",
+            tickmode="linear",
+            tick0=cat_dist['Cantidad'].min(),
+            dtick=(cat_dist['Cantidad'].max() - cat_dist['Cantidad'].min()) / 4
+        )
+    )
     fig_categories.update_traces(textinfo="label+value")
     st.plotly_chart(fig_categories, use_container_width=True)
 
@@ -439,10 +460,18 @@ def show_distributions(df_filtered):
         path=['Label'],
         values='Frecuencia',
         color='Cantidad',
-        color_continuous_scale=['#FFA07A', '#FF8C42', '#FF6347', '#FF4B4B'],
+        color_continuous_scale=['#FFF3E0', '#FF9800', '#E65100'],  # Naranja claro a naranja muy oscuro
         title="Distribución de Marcas Únicas"
     )
-    fig_brands.update_layout(height=400)
+    fig_brands.update_layout(
+        height=400,
+        coloraxis_colorbar=dict(
+            title="Cantidad",
+            tickmode="linear",
+            tick0=brands_dist['Cantidad'].min(),
+            dtick=(brands_dist['Cantidad'].max() - brands_dist['Cantidad'].min()) / 4
+        )
+    )
     fig_brands.update_traces(textinfo="label+value")
     st.plotly_chart(fig_brands, use_container_width=True)
 

@@ -15,15 +15,19 @@ sys.path.insert(0, str(project_root))
 
 from predict import LoyaltyPredictionPipeline
 
-# Paleta de colores rojo-naranja
+# Paleta de colores azules
 COLOR_PALETTE = {
-    'primary': '#FF4B4B',      # Rojo
-    'secondary': '#FF8C42',    # Naranja
-    'tertiary': '#FFA07A',     # Salmón claro
-    'quaternary': '#FF6347',   # Tomate
-    'background': '#FFF5F0',   # Fondo claro
-    'positive': '#FF4B4B',     # Rojo para recurrente
-    'negative': '#FF8C42',     # Naranja para no recurrente
+    'primary':       "#0082C8",  # Azul intenso (color principal)
+    'secondary':     "#006789",  # Azul medio
+    'tertiary':      "#49DBF9",  # Celeste suave
+    'quaternary':    "#90E0EF",  # Azul pastel
+    'dark_orange':   "#00A896",  # Verde aqua profundo (nuevo énfasis)
+    
+    'background':    "#E6F7F9",  # Fondo azul muy claro
+    
+    'recurrent':     "#0A9396",  # Verde-azulado fuerte (Recurrente)
+    'non_recurrent': "#8ECAE6",  # Celeste claro (No recurrente)
+    'unknown':       "#A8BFCB"   # Gris azulado (Desconocidos)
 }
 
 @st.cache_resource
@@ -361,7 +365,7 @@ def display_prediction_results(results, input_data, use_ensemble):
             go.Bar(
                 x=model_names,
                 y=[p*100 for p in probabilities],
-                marker_color=[COLOR_PALETTE['primary'] if pred == 1 else COLOR_PALETTE['secondary']
+                marker_color=[COLOR_PALETTE['recurrent'] if pred == 1 else COLOR_PALETTE['non_recurrent']
                              for pred in predictions],
                 text=[f"{p*100:.1f}%" for p in probabilities],
                 textposition='auto',
@@ -586,17 +590,12 @@ def display_model_comparison_charts(results, df_test, true_labels=None):
         st.markdown("---")
 
     # Distribución de probabilidades con gráficos enlazados
-    st.markdown("### 📈 Distribuciones y Comparaciones Interactivas")
+    st.markdown("### 📈 Comparaciones Interactivas")
 
-    tab_dist, tab_scatter, tab_confusion, tab_calibration = st.tabs([
-        "📊 Distribuciones",
+    tab_scatter, tab_confusion = st.tabs([
         "🔗 Gráficos Enlazados",
-        "📋 Matrices de Confusión",
-        "📉 Curvas de Calibración"
+        "📋 Matrices de Confusión"
     ])
-
-    with tab_dist:
-        display_probability_distributions(results)
 
     with tab_scatter:
         display_linked_scatter_plots(results, df_test)
@@ -607,16 +606,6 @@ def display_model_comparison_charts(results, df_test, true_labels=None):
         else:
             st.warning("⚠️ Matrices de confusión requieren labels verdaderos. Usa 'train_clean.csv (con labels)' como fuente.")
 
-    with tab_calibration:
-        if true_labels is not None:
-            display_calibration_curves(results, true_labels)
-        else:
-            st.warning("⚠️ Curvas de calibración requieren labels verdaderos. Usa 'train_clean.csv (con labels)' como fuente.")
-
-    # Acuerdo entre modelos
-    st.markdown("---")
-    st.markdown("### 🤝 Análisis de Acuerdo entre Modelos")
-    display_model_agreement(results)
 
 def display_performance_metrics(results, true_labels):
     """Mostrar métricas de performance detalladas"""
@@ -640,135 +629,41 @@ def display_performance_metrics(results, true_labels):
 
     metrics_df = pd.DataFrame(metrics_data)
 
-    # Mostrar tabla de métricas
-    col_table, col_viz = st.columns([1, 1])
-
-    with col_table:
-        st.dataframe(
-            metrics_df.style.format({
-                'Accuracy': '{:.4f}',
-                'Precision': '{:.4f}',
-                'Recall': '{:.4f}',
-                'F1-Score': '{:.4f}',
-                'ROC-AUC': '{:.4f}'
-            }).background_gradient(cmap='Reds', subset=['Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC']),
-            use_container_width=True,
-            hide_index=True
-        )
-
-    with col_viz:
-        # Gráfico de radar de métricas
-        fig_radar = go.Figure()
-
-        for _, row in metrics_df.iterrows():
-            fig_radar.add_trace(go.Scatterpolar(
-                r=[row['Accuracy'], row['Precision'], row['Recall'], row['F1-Score'], row['ROC-AUC']],
-                theta=['Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC'],
-                fill='toself',
-                name=row['Modelo']
-            ))
-
-        fig_radar.update_layout(
-            polar=dict(radialaxis=dict(visible=True, range=[0, 1])),
-            showlegend=True,
-            height=400,
-            title="Comparación de Métricas (Radar Chart)"
-        )
-
-        st.plotly_chart(fig_radar, use_container_width=True)
-
-    # Gráfico de barras comparativo
-    st.markdown("#### Comparación Visual de Métricas")
-
-    metrics_long = metrics_df.melt(id_vars=['Modelo'], var_name='Métrica', value_name='Valor')
-
-    fig_metrics = px.bar(
-        metrics_long,
-        x='Métrica',
-        y='Valor',
-        color='Modelo',
-        barmode='group',
-        color_discrete_map={
-            'Random Forest': COLOR_PALETTE['primary'],
-            'XGBoost': COLOR_PALETTE['secondary'],
-            'LightGBM': COLOR_PALETTE['tertiary']
-        },
-        text='Valor'
+    # Mostrar tabla de métricas arriba y gráfico de radar abajo en una sola columna
+    st.dataframe(
+        metrics_df.style.format({
+            'Accuracy': '{:.4f}',
+            'Precision': '{:.4f}',
+            'Recall': '{:.4f}',
+            'F1-Score': '{:.4f}',
+            'ROC-AUC': '{:.4f}'
+        }).background_gradient(cmap='Blues', subset=['Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC']),
+        use_container_width=True,
+        hide_index=True
     )
 
-    fig_metrics.update_traces(texttemplate='%{text:.3f}', textposition='outside')
-    fig_metrics.update_layout(height=400, yaxis_range=[0, 1.1])
+    # Gráfico de radar de métricas
+    fig_radar = go.Figure()
 
-    st.plotly_chart(fig_metrics, use_container_width=True)
+    colors_radar = [COLOR_PALETTE['primary'], COLOR_PALETTE['secondary'], COLOR_PALETTE['tertiary']]
 
-def display_probability_distributions(results):
-    """Mostrar distribuciones de probabilidades"""
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        # Histograma overlayed
-        fig_hist = go.Figure()
-
-        colors = [COLOR_PALETTE['primary'], COLOR_PALETTE['secondary'], COLOR_PALETTE['tertiary']]
-
-        for idx, (model_name, data) in enumerate(results.items()):
-            fig_hist.add_trace(go.Histogram(
-                x=data['probabilities'],
-                name=model_name,
-                opacity=0.6,
-                nbinsx=50,
-                marker_color=colors[idx % len(colors)]
-            ))
-
-        fig_hist.update_layout(
-            barmode='overlay',
-            title="Distribución de Probabilidades (Histogram)",
-            xaxis_title="Probabilidad de Recurrencia",
-            yaxis_title="Frecuencia",
-            height=400
-        )
-
-        st.plotly_chart(fig_hist, use_container_width=True)
-
-    with col2:
-        # Box plots
-        fig_box = go.Figure()
-
-        for idx, (model_name, data) in enumerate(results.items()):
-            fig_box.add_trace(go.Box(
-                y=data['probabilities'],
-                name=model_name,
-                marker_color=colors[idx % len(colors)]
-            ))
-
-        fig_box.update_layout(
-            title="Distribución de Probabilidades (Box Plot)",
-            yaxis_title="Probabilidad",
-            height=400
-        )
-
-        st.plotly_chart(fig_box, use_container_width=True)
-
-    # Violin plots
-    fig_violin = go.Figure()
-
-    for idx, (model_name, data) in enumerate(results.items()):
-        fig_violin.add_trace(go.Violin(
-            y=data['probabilities'],
-            name=model_name,
-            box_visible=True,
-            meanline_visible=True,
-            marker_color=colors[idx % len(colors)]
+    for idx, (_, row) in enumerate(metrics_df.iterrows()):
+        fig_radar.add_trace(go.Scatterpolar(
+            r=[row['Accuracy'], row['Precision'], row['Recall'], row['F1-Score'], row['ROC-AUC']],
+            theta=['Accuracy', 'Precision', 'Recall', 'F1-Score', 'ROC-AUC'],
+            fill='toself',
+            name=row['Modelo'],
+            line=dict(color=colors_radar[idx % len(colors_radar)])
         ))
 
-    fig_violin.update_layout(
-        title="Distribución de Probabilidades (Violin Plot)",
-        yaxis_title="Probabilidad",
-        height=400
+    fig_radar.update_layout(
+        polar=dict(radialaxis=dict(visible=True, range=[0, 1])),
+        showlegend=True,
+        height=400,
+        title="Comparación de Métricas (Radar Chart)"
     )
 
-    st.plotly_chart(fig_violin, use_container_width=True)
+    st.plotly_chart(fig_radar, use_container_width=True)
 
 def display_linked_scatter_plots(results, df_test):
     """Gráficos de dispersión enlazados interactivos"""
@@ -798,7 +693,7 @@ def display_linked_scatter_plots(results, df_test):
                 marker=dict(
                     size=8,
                     color=agreement,
-                    colorscale=[[0, COLOR_PALETTE['secondary']], [1, COLOR_PALETTE['primary']]],
+                    colorscale=[[0, COLOR_PALETTE['non_recurrent']], [1, COLOR_PALETTE['recurrent']]],
                     showscale=True,
                     colorbar=dict(title="Acuerdo", tickvals=[0, 1], ticktext=['No', 'Sí']),
                     opacity=0.6
@@ -873,254 +768,85 @@ def display_linked_scatter_plots(results, df_test):
 
                 st.plotly_chart(fig_scatter2, use_container_width=True)
 
-        # Heatmap de correlación entre probabilidades de modelos
-        if len(model_list) >= 2:
-            st.markdown("#### Correlación entre Predicciones de Modelos")
-
-            # Crear matriz de correlación
-            prob_matrix = np.column_stack([results[m]['probabilities'] for m in model_list])
-            corr_matrix = np.corrcoef(prob_matrix.T)
-
-            fig_corr = go.Figure(data=go.Heatmap(
-                z=corr_matrix,
-                x=model_list,
-                y=model_list,
-                colorscale=[
-                    [0, '#FFFFFF'],
-                    [0.5, COLOR_PALETTE['tertiary']],
-                    [1, COLOR_PALETTE['primary']]
-                ],
-                text=corr_matrix.round(3),
-                texttemplate='%{text}',
-                textfont={"size": 14},
-                colorbar=dict(title="Correlación")
-            ))
-
-            fig_corr.update_layout(
-                title="Matriz de Correlación de Probabilidades entre Modelos",
-                height=400
-            )
-
-            st.plotly_chart(fig_corr, use_container_width=True)
-
 def display_confusion_matrices(results, true_labels):
-    """Mostrar matrices de confusión para cada modelo"""
+    """Mostrar matrices de confusión mejoradas para cada modelo"""
     from sklearn.metrics import confusion_matrix
+
+    st.markdown("#### 📋 Matrices de Confusión Detalladas")
+    st.caption("💡 **Interpretación:** Verdaderos Positivos (VP), Falsos Negativos (FN), Falsos Positivos (FP), Verdaderos Negativos (VN)")
 
     cols = st.columns(len(results))
 
     for idx, (col, (model_name, data)) in enumerate(zip(cols, results.items())):
         with col:
             cm = confusion_matrix(true_labels, data['predictions'])
+            
+            # Calcular métricas adicionales
+            tn, fp, fn, tp = cm.ravel()
+            total = cm.sum()
+            
+            # Crear etiquetas más descriptivas
+            labels_x = ['Predicción:<br>No Recurrente', 'Predicción:<br>Recurrente']
+            labels_y = ['Real:<br>No Recurrente', 'Real:<br>Recurrente']
 
             fig_cm = go.Figure(data=go.Heatmap(
                 z=cm,
-                x=['Pred: No Rec', 'Pred: Rec'],
-                y=['Real: No Rec', 'Real: Rec'],
-                text=cm,
-                texttemplate='%{text}',
-                textfont={"size": 16},
+                x=labels_x,
+                y=labels_y,
                 colorscale=[
-                    [0, '#FFFFFF'],
-                    [1, COLOR_PALETTE['primary']]
+                    [0, '#F8F9FA'],  # Blanco muy claro
+                    [0.3, COLOR_PALETTE['quaternary']],  # Azul pastel
+                    [0.6, COLOR_PALETTE['tertiary']],    # Celeste suave
+                    [1, COLOR_PALETTE['primary']]        # Azul intenso
                 ],
-                showscale=False
+                showscale=False,
+                hovertemplate='<b>%{y}</b><br><b>%{x}</b><br>Cantidad: %{z}<br>Porcentaje: %{text}<extra></extra>',
+                text=[[f"{cm[i,j]/total*100:.1f}%" for j in range(2)] for i in range(2)]
             ))
 
-            # Añadir anotaciones
+            # Añadir anotaciones mejoradas sin duplicar números
             annotations = []
+            metrics_labels = [['VN', 'FP'], ['FN', 'VP']]  # Verdadero Negativo, Falso Positivo, etc.
+            
             for i in range(2):
                 for j in range(2):
+                    # Determinar color del texto basado en intensidad del fondo
+                    text_color = 'white' if cm[i,j] > cm.max()/2 else 'black'
+                    
                     annotations.append(
                         dict(
                             x=j,
                             y=i,
-                            text=f"{cm[i,j]}<br>({cm[i,j]/cm.sum()*100:.1f}%)",
+                            text=f"<b>{metrics_labels[i][j]}</b><br>{cm[i,j]}<br>({cm[i,j]/total*100:.1f}%)",
                             showarrow=False,
-                            font=dict(color='white' if cm[i,j] > cm.max()/2 else 'black', size=14)
+                            font=dict(color=text_color, size=12),
+                            align='center'
                         )
                     )
 
             fig_cm.update_layout(
-                title=f"{model_name}",
-                height=350,
-                annotations=annotations
+                title=f"<b>{model_name}</b><br><sub>Total: {total:,} casos</sub>",
+                height=400,
+                annotations=annotations,
+                xaxis={'side': 'bottom', 'title': 'Predicción del Modelo'},
+                yaxis={'title': 'Valor Real'}
             )
-
+            
             st.plotly_chart(fig_cm, use_container_width=True)
-
-def display_calibration_curves(results, true_labels):
-    """Mostrar curvas de calibración de probabilidades"""
-
-    st.info("📉 **Curvas de Calibración:** Muestran qué tan bien calibradas están las probabilidades predichas")
-
-    # Calcular bins para calibración
-    n_bins = 10
-
-    fig_cal = go.Figure()
-
-    colors_list = [COLOR_PALETTE['primary'], COLOR_PALETTE['secondary'], COLOR_PALETTE['tertiary']]
-
-    for idx, (model_name, data) in enumerate(results.items()):
-        prob_true, prob_pred = calibration_curve_custom(true_labels, data['probabilities'], n_bins=n_bins)
-
-        fig_cal.add_trace(go.Scatter(
-            x=prob_pred,
-            y=prob_true,
-            mode='lines+markers',
-            name=model_name,
-            line=dict(color=colors_list[idx % len(colors_list)], width=3),
-            marker=dict(size=10)
-        ))
-
-    # Línea de calibración perfecta
-    fig_cal.add_trace(go.Scatter(
-        x=[0, 1],
-        y=[0, 1],
-        mode='lines',
-        name='Perfectamente Calibrado',
-        line=dict(dash='dash', color='gray', width=2)
-    ))
-
-    fig_cal.update_layout(
-        title="Curvas de Calibración de Probabilidades",
-        xaxis_title="Probabilidad Predicha Media",
-        yaxis_title="Fracción de Positivos",
-        height=500,
-        xaxis=dict(range=[0, 1]),
-        yaxis=dict(range=[0, 1])
-    )
-
-    st.plotly_chart(fig_cal, use_container_width=True)
-
-    st.caption("💡 Una curva cercana a la diagonal indica buena calibración")
-
-def calibration_curve_custom(y_true, y_prob, n_bins=10):
-    """Calcular curva de calibración personalizada"""
-    bins = np.linspace(0, 1, n_bins + 1)
-    binids = np.digitize(y_prob, bins) - 1
-
-    bin_sums = np.bincount(binids, weights=y_prob, minlength=n_bins)
-    bin_true = np.bincount(binids, weights=y_true, minlength=n_bins)
-    bin_total = np.bincount(binids, minlength=n_bins)
-
-    nonzero = bin_total != 0
-    prob_true = bin_true[nonzero] / bin_total[nonzero]
-    prob_pred = bin_sums[nonzero] / bin_total[nonzero]
-
-    return prob_true, prob_pred
-
-def display_model_agreement(results):
-    """Análisis de acuerdo entre modelos"""
-
-    model_list = list(results.keys())
-
-    if len(model_list) < 2:
-        st.warning("Se necesitan al menos 2 modelos para analizar acuerdo")
-        return
-
-    # Matriz de acuerdo
-    agreement_matrix = np.zeros((len(model_list), len(model_list)))
-
-    for i, model1 in enumerate(model_list):
-        for j, model2 in enumerate(model_list):
-            if i == j:
-                agreement_matrix[i, j] = 100
-            else:
-                pred1 = results[model1]['predictions']
-                pred2 = results[model2]['predictions']
-                agreement = (pred1 == pred2).sum() / len(pred1) * 100
-                agreement_matrix[i, j] = agreement
-
-    # Visualizar matriz de acuerdo
-    fig_agreement = go.Figure(data=go.Heatmap(
-        z=agreement_matrix,
-        x=model_list,
-        y=model_list,
-        colorscale=[
-            [0, '#FFFFFF'],
-            [0.5, COLOR_PALETTE['secondary']],
-            [1, COLOR_PALETTE['primary']]
-        ],
-        text=agreement_matrix.round(1),
-        texttemplate='%{text}%',
-        textfont={"size": 14},
-        colorbar=dict(title="% Acuerdo")
-    ))
-
-    fig_agreement.update_layout(
-        title="Matriz de Acuerdo entre Modelos (%)",
-        height=400
-    )
-
-    st.plotly_chart(fig_agreement, use_container_width=True)
-
-    # Métricas de acuerdo
-    col1, col2, col3 = st.columns(3)
-
-    if len(model_list) >= 2:
-        with col1:
-            agreement_01 = agreement_matrix[0, 1]
-            st.metric(
-                f"Acuerdo: {model_list[0]} - {model_list[1]}",
-                f"{agreement_01:.1f}%"
-            )
-
-        if len(model_list) >= 3:
-            with col2:
-                agreement_02 = agreement_matrix[0, 2]
-                st.metric(
-                    f"Acuerdo: {model_list[0]} - {model_list[2]}",
-                    f"{agreement_02:.1f}%"
-                )
-
-            with col3:
-                agreement_12 = agreement_matrix[1, 2]
-                st.metric(
-                    f"Acuerdo: {model_list[1]} - {model_list[2]}",
-                    f"{agreement_12:.1f}%"
-                )
-
-    # Análisis de desacuerdos
-    if len(model_list) == 3:
-        st.markdown("#### Análisis de Consenso/Desacuerdo")
-
-        pred1 = results[model_list[0]]['predictions']
-        pred2 = results[model_list[1]]['predictions']
-        pred3 = results[model_list[2]]['predictions']
-
-        # Calcular consenso
-        consensus_all = ((pred1 == pred2) & (pred2 == pred3)).sum()
-        consensus_2_of_3 = (((pred1 == pred2) | (pred1 == pred3) | (pred2 == pred3)) & ~((pred1 == pred2) & (pred2 == pred3))).sum()
-        no_consensus = ((pred1 != pred2) & (pred1 != pred3) & (pred2 != pred3)).sum()
-
-        consensus_data = pd.DataFrame({
-            'Tipo': ['Consenso Total (3/3)', 'Mayoría (2/3)', 'Sin Consenso (0/3)'],
-            'Cantidad': [consensus_all, consensus_2_of_3, no_consensus],
-            'Porcentaje': [
-                consensus_all / len(pred1) * 100,
-                consensus_2_of_3 / len(pred1) * 100,
-                no_consensus / len(pred1) * 100
-            ]
-        })
-
-        fig_consensus = go.Figure(data=[
-            go.Bar(
-                x=consensus_data['Tipo'],
-                y=consensus_data['Cantidad'],
-                marker_color=[COLOR_PALETTE['primary'], COLOR_PALETTE['secondary'], COLOR_PALETTE['tertiary']],
-                text=[f"{v} ({p:.1f}%)" for v, p in zip(consensus_data['Cantidad'], consensus_data['Porcentaje'])],
-                textposition='auto',
-            )
-        ])
-
-        fig_consensus.update_layout(
-            title="Distribución de Consenso entre los 3 Modelos",
-            yaxis_title="Cantidad de Predicciones",
-            height=400
-        )
-
-        st.plotly_chart(fig_consensus, use_container_width=True)
+            
+            # Mostrar métricas interpretativas
+            accuracy = (tp + tn) / total
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+            specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+            
+            st.markdown(f"""
+            **Métricas del Modelo:**
+            - **Precisión:** {precision:.3f} ({tp}/{tp + fp})
+            - **Recall:** {recall:.3f} ({tp}/{tp + fn})
+            - **Especificidad:** {specificity:.3f} ({tn}/{tn + fp})
+            - **Exactitud:** {accuracy:.3f}
+            """, unsafe_allow_html=True)
 
 def show_model_performance(pipeline):
     """Mostrar métricas de performance de modelos"""
